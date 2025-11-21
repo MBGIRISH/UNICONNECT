@@ -1,34 +1,38 @@
 import { initializeApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+import { getAuth, GoogleAuthProvider } from "firebase/auth";
+import { getStorage } from "firebase/storage";
 
 // ---------------------------------------------------------------------------
-// Configuration updated with credentials from provided project info.
-// Project ID: uni-connect-b63b0
+// Firebase Configuration for UniConnect
+// Project ID: campus-connect-fd225
 // ---------------------------------------------------------------------------
 const firebaseConfig = {
-  apiKey: "AIzaSyC6GPklXGg7BhPZCmOgIMYZsZIgCLbrWAM",
-  authDomain: "uni-connect-b63b0.firebaseapp.com",
-  projectId: "uni-connect-b63b0",
-  storageBucket: "uni-connect-b63b0.firebasestorage.app",
-  messagingSenderId: "757039046178",
-  // Note: Using the provided Android App ID. For best web compatibility, 
-  // register a Web App in the Firebase Console and update this ID.
-  appId: "1:757039046178:android:d54158941e4add6bafb47b"
+  apiKey: "AIzaSyCEnrTZlR-6DrxnRT8secbbidjfw5vzIyc",
+  authDomain: "campus-connect-fd225.firebaseapp.com",
+  projectId: "campus-connect-fd225",
+  storageBucket: "campus-connect-fd225.firebasestorage.app",
+  messagingSenderId: "258370587794",
+  appId: "1:258370587794:web:86b682bbcb6ef5d068aa4b",
+  measurementId: "G-PPW76QX696"
 };
 
-// Initialize Firebase with safety check
-let app;
-let db;
-let auth;
+// Initialize Firebase
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
 
+// Storage might not be available on free tier without billing enabled
+// The app will work fine without it - image uploads will just be disabled
+let storage;
 try {
-  app = initializeApp(firebaseConfig);
-  db = getFirestore(app);
-  auth = getAuth(app);
+  storage = getStorage(app);
+  console.log('✅ Firebase Storage initialized');
 } catch (error) {
-  console.error("Firebase initialization failed", error);
-  // The app will degrade gracefully in Demo mode if these are undefined
+  console.warn('⚠️ Firebase Storage not available - image uploads disabled');
+  console.warn('To enable: Upgrade to Blaze plan or wait for Google to fix free tier access');
 }
 
-export { db, auth };
+const googleProvider = new GoogleAuthProvider();
+
+export { db, auth, storage, googleProvider };

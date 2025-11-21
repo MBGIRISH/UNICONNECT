@@ -6,19 +6,23 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "init-db": "npx tsx initFirebase.ts"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
+    "firebase": "^10.8.0",
+    "lucide-react": "0.344.0",
     "react": "18.2.0",
     "react-dom": "18.2.0",
-    "react-router-dom": "6.22.3",
-    "lucide-react": "0.344.0",
-    "@google/genai": "0.1.1",
-    "firebase": "^12.6.0"
+    "react-router-dom": "6.22.3"
   },
   "devDependencies": {
     "@types/node": "^22.14.0",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "tsx": "^4.20.6",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

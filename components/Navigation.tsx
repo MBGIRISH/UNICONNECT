@@ -1,17 +1,20 @@
 import React from 'react';
-import { Home, Calendar, ShoppingBag, Users, User, PlusCircle } from 'lucide-react';
-import { Link, useLocation } from 'react-router-dom';
+import { Home, Calendar, ShoppingBag, Users, User, PlusCircle, Clock, BookOpen } from 'lucide-react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const Navigation: React.FC = () => {
   const location = useLocation();
+  const navigate = useNavigate();
 
   const isActive = (path: string) => location.pathname === path;
 
   const navItems = [
     { icon: Home, label: 'Feed', path: '/' },
     { icon: Calendar, label: 'Events', path: '/events' },
+    { icon: Clock, label: 'Timetable', path: '/timetable' },
     { icon: Users, label: 'Groups', path: '/groups' },
-    { icon: ShoppingBag, label: 'Market', path: '/market' },
+    { icon: ShoppingBag, label: 'Market', path: '/marketplace' },
+    { icon: BookOpen, label: 'Resources', path: '/resources' },
     { icon: User, label: 'Profile', path: '/profile' },
   ];
 
@@ -44,7 +47,10 @@ const Navigation: React.FC = () => {
         </div>
 
         <div className="p-4">
-          <button className="w-full bg-primary hover:bg-indigo-700 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 shadow-lg shadow-primary/25 transition-all">
+          <button 
+            onClick={() => navigate('/')}
+            className="w-full bg-primary hover:bg-indigo-700 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 shadow-lg shadow-primary/25 transition-all"
+          >
             <PlusCircle size={20} />
             New Post
           </button>

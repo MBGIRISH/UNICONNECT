@@ -1,7 +1,10 @@
 import React, { useEffect, useState, createContext, useContext } from 'react';
-import { HashRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
-import { auth } from './firebaseConfig';
+import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
+import { auth } from './firebaseConfig';
+import { Loader2 } from 'lucide-react';
+
+// Pages
 import Navigation from './components/Navigation';
 import Feed from './pages/Feed';
 import Events from './pages/Events';
@@ -9,89 +12,53 @@ import Marketplace from './pages/Marketplace';
 import StudyGroups from './pages/StudyGroups';
 import Profile from './pages/Profile';
 import Login from './pages/Login';
-import { Loader2 } from 'lucide-react';
+import Onboarding from './pages/Onboarding';
+import Messages from './pages/Messages';
+import Timetable from './pages/Timetable';
+import Resources from './pages/Resources';
 
-// --- Auth Context ---
+// Auth Context
 interface AuthContextType {
-  user: FirebaseUser | { uid: string; displayName: string; photoURL: string; email?: string } | null;
+  user: FirebaseUser | null;
   loading: boolean;
-  loginDemo: () => void;
 }
 
-const AuthContext = createContext<AuthContextType>({ user: null, loading: true, loginDemo: () => {} });
+const AuthContext = createContext<AuthContextType>({ user: null, loading: true });
 
 export const useAuth = () => useContext(AuthContext);
 
 const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<any>(null);
+  const [user, setUser] = useState<FirebaseUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [isDemo, setIsDemo] = useState(false);
 
   useEffect(() => {
-    if (isDemo) {
-      setUser({
-        uid: 'demo-user',
-        displayName: 'Demo Student',
-        photoURL: 'https://ui-avatars.com/api/?name=Demo+Student&background=4f46e5&color=fff',
-        email: 'demo@university.edu'
-      });
-      setLoading(false);
-      return;
-    }
-
-    // Fail-safe: If Auth doesn't initialize properly or takes too long, stop loading
-    // This prevents the "white screen" if Firebase config is invalid
-    const timeoutId = setTimeout(() => {
-        if (loading) {
-            console.warn("Auth check timed out - allowing app to load in guest/login state");
-            setLoading(false);
-        }
-    }, 2500);
-
-    let unsubscribe = () => {};
-    try {
-      // Check if auth is initialized (it might be undefined if firebaseConfig failed)
-      if (auth) {
-        unsubscribe = onAuthStateChanged(auth, 
-            (currentUser) => {
-                setUser(currentUser);
-                setLoading(false);
-            },
-            (error) => {
-                console.error("Auth Error:", error);
-                setLoading(false);
-            }
-        );
-      } else {
-        console.warn("Firebase Auth service not available");
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (currentUser) => {
+        setUser(currentUser);
+        setLoading(false);
+      },
+      (error) => {
+        console.error('Auth Error:', error);
         setLoading(false);
       }
-    } catch (e) {
-      console.error("Auth Init Failed:", e);
-      setLoading(false);
-    }
+    );
 
-    return () => {
-        if (unsubscribe) unsubscribe();
-        clearTimeout(timeoutId);
-    };
-  }, [isDemo]);
-
-  const loginDemo = () => setIsDemo(true);
+    return () => unsubscribe();
+  }, []);
 
   return (
-    <AuthContext.Provider value={{ user, loading, loginDemo }}>
+    <AuthContext.Provider value={{ user, loading }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-// --- Layouts ---
-
+// Layout component
 const Layout = ({ children }: { children?: React.ReactNode }) => {
   const location = useLocation();
-  const isChat = location.pathname === '/groups';
-  
+  const isChat = location.pathname === '/groups' || location.pathname === '/messages';
+
   return (
     <div className="flex min-h-screen bg-slate-50">
       <Navigation />
@@ -102,15 +69,42 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
   );
 };
 
+// Protected Route component
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
-    return <div className="h-screen flex items-center justify-center"><Loader2 className="animate-spin text-primary" size={40}/></div>;
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <Loader2 className="animate-spin text-indigo-600 mx-auto mb-4" size={48} />
+          <p className="text-slate-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
   if (!user) {
-    return <Navigate to="/login" />;
+    return <Navigate to="/login" replace />;
+  }
+
+  return children;
+};
+
+// Public Route component (redirect to home if already logged in)
+const PublicRoute = ({ children }: { children: React.ReactElement }) => {
+  const { user, loading } = useAuth();
+
+  if (loading) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+      </div>
+    );
+  }
+
+  if (user) {
+    return <Navigate to="/" replace />;
   }
 
   return children;
@@ -120,22 +114,49 @@ const App: React.FC = () => {
   return (
     <AuthProvider>
       <Router>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route path="/*" element={
+      <Routes>
+        {/* Public routes */}
+        <Route
+          path="/login"
+          element={
+            <PublicRoute>
+              <Login />
+            </PublicRoute>
+          }
+        />
+
+        {/* Onboarding route */}
+        <Route
+          path="/onboarding"
+          element={
+            <ProtectedRoute>
+              <Onboarding />
+            </ProtectedRoute>
+          }
+        />
+
+        {/* Protected routes */}
+        <Route
+          path="/*"
+          element={
             <ProtectedRoute>
               <Layout>
                 <Routes>
                   <Route path="/" element={<Feed />} />
                   <Route path="/events" element={<Events />} />
-                  <Route path="/market" element={<Marketplace />} />
+                  <Route path="/marketplace" element={<Marketplace />} />
                   <Route path="/groups" element={<StudyGroups />} />
+                  <Route path="/messages" element={<Messages />} />
+                  <Route path="/timetable" element={<Timetable />} />
+                  <Route path="/resources" element={<Resources />} />
                   <Route path="/profile" element={<Profile />} />
+                  <Route path="/profile/:userId" element={<Profile />} />
                 </Routes>
               </Layout>
             </ProtectedRoute>
-          } />
-        </Routes>
+          }
+        />
+      </Routes>
       </Router>
     </AuthProvider>
   );

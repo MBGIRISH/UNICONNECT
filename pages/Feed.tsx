@@ -1,18 +1,25 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Sparkles, Loader2 } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Sparkles, Loader2, Upload } from 'lucide-react';
 import { Post } from '../types';
 import Header from '../components/Header';
 import { generatePostContent } from '../services/geminiService';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, increment, getDoc, getDocs } from 'firebase/firestore';
+import { uploadPostImages } from '../services/cloudinaryService';
 
 const Feed: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isGenerating, setIsGenerating] = useState(false);
   const [newPostText, setNewPostText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [imageUrl, setImageUrl] = useState('');
+  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [showCommentsFor, setShowCommentsFor] = useState<string | null>(null);
+  const [comments, setComments] = useState<{[key: string]: any[]}>({});
+  const [newComment, setNewComment] = useState('');
   const { user } = useAuth();
 
   useEffect(() => {
@@ -51,24 +58,26 @@ const Feed: React.FC = () => {
       setPosts([
             {
                 id: 'mock-1',
-                userId: '1',
-                userName: 'Campus Admin',
-                userAvatar: 'https://ui-avatars.com/api/?name=Admin&background=4f46e5&color=fff',
+                authorId: '1',
+                authorName: 'Campus Admin',
+                authorAvatar: 'https://ui-avatars.com/api/?name=Admin&background=4f46e5&color=fff',
                 content: '👋 Welcome to UniConnect! \n\nIf you see this, we are running in Demo Mode or offline.',
-                likes: 100,
-                comments: 12,
-                timestamp: 'Pinned'
+                likesCount: 100,
+                commentsCount: 12,
+                createdAt: new Date(),
+                updatedAt: new Date()
             },
             {
                 id: 'mock-2',
-                userId: '2',
-                userName: 'Sarah Student',
-                userAvatar: 'https://ui-avatars.com/api/?name=Sarah',
+                authorId: '2',
+                authorName: 'Sarah Student',
+                authorAvatar: 'https://ui-avatars.com/api/?name=Sarah',
                 content: 'Just finished my final project! 📚☕️ #CSLife',
-                image: 'https://picsum.photos/seed/study/800/400',
-                likes: 24,
-                comments: 3,
-                timestamp: '2h ago'
+                imageUrls: ['https://picsum.photos/seed/study/800/400'],
+                likesCount: 24,
+                commentsCount: 3,
+                createdAt: new Date(),
+                updatedAt: new Date()
             }
       ]);
       setIsLoading(false);
@@ -81,46 +90,167 @@ const Feed: React.FC = () => {
     setIsGenerating(false);
   };
 
+  const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setImageFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImagePreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handlePost = async () => {
     if (!newPostText.trim()) return;
     
-    if (!user) return;
+    if (!user) {
+      alert('Please log in to create a post');
+      return;
+    }
 
+    setUploading(true);
     try {
+      let imageUrls: string[] = [];
+      
+      // Upload image to Cloudinary if present
+      if (imageFile) {
+        const postId = `temp_${Date.now()}`;
+        imageUrls = await uploadPostImages(postId, [imageFile]);
+      }
+
       if (db) {
           await addDoc(collection(db, "posts"), {
-            userId: user.uid,
-            userName: user.displayName || 'Student',
-            userAvatar: user.photoURL || `https://ui-avatars.com/api/?name=${user.displayName}`,
+            authorId: user.uid,
+            authorName: user.displayName || 'Student',
+            authorAvatar: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Student')}`,
             content: newPostText,
-            image: imageUrl || null,
-            likes: 0,
-            comments: 0,
+            imageUrls: imageUrls,
+            likesCount: 0,
+            commentsCount: 0,
             createdAt: serverTimestamp(),
-            timestamp: "Just now" 
+            updatedAt: serverTimestamp()
           });
           setNewPostText('');
-          setImageUrl('');
+          setImageFile(null);
+          setImagePreview('');
+          alert('Post created successfully!');
       } else {
           throw new Error("DB Offline");
       }
-    } catch (e) {
-      console.error("Error adding document: ", e);
-      // Mock adding for demo
-      const newMockPost: Post = {
-        id: Date.now().toString(),
-        userId: user.uid,
-        userName: user.displayName || 'Me',
-        userAvatar: user.photoURL || '',
-        content: newPostText,
-        image: imageUrl,
-        likes: 0,
-        comments: 0,
-        timestamp: "Just now"
+    } catch (e: any) {
+      console.error("Error adding post: ", e);
+      alert(e.message || 'Failed to create post. Please try again.');
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleLike = async (postId: string) => {
+    if (!user || !db) return;
+
+    try {
+      const postRef = doc(db, 'posts', postId);
+      const isLiked = likedPosts.has(postId);
+
+      if (isLiked) {
+        // Unlike
+        await updateDoc(postRef, {
+          likesCount: increment(-1)
+        });
+        setLikedPosts(prev => {
+          const newSet = new Set(prev);
+          newSet.delete(postId);
+          return newSet;
+        });
+      } else {
+        // Like
+        await updateDoc(postRef, {
+          likesCount: increment(1)
+        });
+        setLikedPosts(prev => new Set(prev).add(postId));
+      }
+    } catch (error) {
+      console.error('Error toggling like:', error);
+    }
+  };
+
+  const handleShare = async (post: Post) => {
+    const shareData = {
+      title: `Post by ${post.authorName}`,
+      text: post.content,
+      url: window.location.href
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        // Fallback: Copy to clipboard
+        await navigator.clipboard.writeText(`${post.content}\n\n- ${post.authorName}`);
+        alert('Post copied to clipboard!');
+      }
+    } catch (error) {
+      console.error('Error sharing:', error);
+    }
+  };
+
+  const handleToggleComments = async (postId: string) => {
+    if (showCommentsFor === postId) {
+      setShowCommentsFor(null);
+    } else {
+      setShowCommentsFor(postId);
+      // Load comments if not already loaded
+      if (!comments[postId] && db) {
+        try {
+          const commentsRef = collection(db, 'posts', postId, 'comments');
+          const q = query(commentsRef, orderBy('createdAt', 'desc'));
+          const snapshot = await getDocs(q);
+          const loadedComments = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          }));
+          setComments(prev => ({ ...prev, [postId]: loadedComments }));
+        } catch (error) {
+          console.error('Error loading comments:', error);
+        }
+      }
+    }
+  };
+
+  const handleAddComment = async (postId: string) => {
+    if (!newComment.trim() || !user || !db) return;
+
+    try {
+      const commentData = {
+        authorId: user.uid,
+        authorName: user.displayName || 'Student',
+        authorAvatar: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Student')}`,
+        content: newComment,
+        createdAt: serverTimestamp()
       };
-      setPosts([newMockPost, ...posts]);
-      setNewPostText('');
-      setImageUrl('');
+
+      // Add comment
+      await addDoc(collection(db, 'posts', postId, 'comments'), commentData);
+      
+      // Update comment count
+      const postRef = doc(db, 'posts', postId);
+      await updateDoc(postRef, {
+        commentsCount: increment(1)
+      });
+
+      // Add to local state immediately
+      setComments(prev => ({
+        ...prev,
+        [postId]: [{ ...commentData, createdAt: new Date(), id: Date.now().toString() }, ...(prev[postId] || [])]
+      }));
+
+      setNewComment('');
+      alert('Comment added!');
+    } catch (error) {
+      console.error('Error adding comment:', error);
+      alert('Failed to add comment');
     }
   };
 
@@ -145,25 +275,33 @@ const Feed: React.FC = () => {
                 value={newPostText}
                 onChange={(e) => setNewPostText(e.target.value)}
                 />
-                {imageUrl && (
+                {imagePreview && (
                   <div className="mt-2 relative">
-                    <img src={imageUrl} alt="Preview" className="h-32 rounded-lg object-cover" />
-                    <button onClick={() => setImageUrl('')} className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs">✕</button>
+                    <img src={imagePreview} alt="Preview" className="h-32 rounded-lg object-cover" />
+                    <button 
+                      onClick={() => {
+                        setImageFile(null);
+                        setImagePreview('');
+                      }} 
+                      className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs hover:bg-black/70"
+                    >
+                      ✕
+                    </button>
                   </div>
                 )}
             </div>
           </div>
           <div className="flex justify-between items-center border-t border-slate-100 pt-3">
             <div className="flex gap-2">
-              <button 
-                onClick={() => {
-                   const url = prompt("Enter Image URL (Mock upload):");
-                   if(url) setImageUrl(url);
-                }}
-                className="p-2 hover:bg-slate-50 rounded-full text-primary"
-              >
-                <ImageIcon size={20} />
-              </button>
+              <label className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer">
+                <Upload size={20} />
+                <input 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleImageSelect}
+                  className="hidden"
+                />
+              </label>
               <button 
                 onClick={handleMagicWrite}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-full transition-colors"
@@ -175,10 +313,17 @@ const Feed: React.FC = () => {
             </div>
             <button 
                 onClick={handlePost}
-                disabled={!newPostText.trim()}
-                className="bg-primary hover:bg-indigo-700 text-white px-6 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50"
+                disabled={!newPostText.trim() || uploading}
+                className="bg-primary hover:bg-indigo-700 text-white px-6 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
             >
-              Post
+              {uploading ? (
+                <>
+                  <Loader2 size={16} className="animate-spin" />
+                  Posting...
+                </>
+              ) : (
+                'Post'
+              )}
             </button>
           </div>
         </div>
@@ -192,11 +337,11 @@ const Feed: React.FC = () => {
                 <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                 <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                    <img src={post.userAvatar} alt={post.userName} className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-50" />
+                    <img src={post.authorAvatar} alt={post.authorName} className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-50" />
                     <div>
-                        <h3 className="font-semibold text-slate-900 text-sm">{post.userName}</h3>
+                        <h3 className="font-semibold text-slate-900 text-sm">{post.authorName}</h3>
                         <p className="text-xs text-slate-500">
-                            {post.timestamp?.toDate ? post.timestamp.toDate().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : (post.timestamp || 'Recent')}
+                            {post.createdAt instanceof Date ? post.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Recent'}
                         </p>
                     </div>
                     </div>
@@ -209,27 +354,106 @@ const Feed: React.FC = () => {
                     <p className="text-slate-800 leading-relaxed whitespace-pre-line">{post.content}</p>
                 </div>
 
-                {post.image && (
+                {post.imageUrls?.[0] && (
                     <div className="w-full bg-slate-100">
-                    <img src={post.image} alt="Post content" className="w-full h-auto max-h-[500px] object-cover" />
+                    <img src={post.imageUrls[0]} alt="Post content" className="w-full h-auto max-h-[500px] object-cover" />
                     </div>
                 )}
 
                 <div className="p-4 flex items-center justify-between border-t border-slate-100">
                     <div className="flex items-center gap-6">
-                    <button className="flex items-center gap-2 text-slate-600 hover:text-red-500 transition-colors group">
-                        <Heart size={22} className="group-hover:scale-110 transition-transform" />
-                        <span className="text-sm font-medium">{post.likes}</span>
+                    <button 
+                      onClick={() => handleLike(post.id)}
+                      className={`flex items-center gap-2 transition-colors group ${
+                        likedPosts.has(post.id) ? 'text-red-500' : 'text-slate-600 hover:text-red-500'
+                      }`}
+                    >
+                        <Heart 
+                          size={22} 
+                          className={`group-hover:scale-110 transition-transform ${
+                            likedPosts.has(post.id) ? 'fill-current' : ''
+                          }`} 
+                        />
+                        <span className="text-sm font-medium">{post.likesCount}</span>
                     </button>
-                    <button className="flex items-center gap-2 text-slate-600 hover:text-blue-500 transition-colors">
+                    <button 
+                      onClick={() => handleToggleComments(post.id)}
+                      className="flex items-center gap-2 text-slate-600 hover:text-blue-500 transition-colors"
+                    >
                         <MessageCircle size={22} />
-                        <span className="text-sm font-medium">{post.comments}</span>
+                        <span className="text-sm font-medium">{post.commentsCount}</span>
                     </button>
                     </div>
-                    <button className="text-slate-400 hover:text-slate-600">
-                    <Share2 size={20} />
+                    <button 
+                      onClick={() => handleShare(post)}
+                      className="text-slate-400 hover:text-slate-600 transition-colors"
+                    >
+                      <Share2 size={20} />
                     </button>
                 </div>
+
+                {/* Comments Section */}
+                {showCommentsFor === post.id && (
+                  <div className="border-t border-slate-100 p-4 bg-slate-50">
+                    {/* Add Comment Input */}
+                    <div className="flex gap-2 mb-4">
+                      <img 
+                        src={user?.photoURL || "https://ui-avatars.com/api/?name=User"} 
+                        alt="You" 
+                        className="w-8 h-8 rounded-full object-cover"
+                      />
+                      <div className="flex-1 flex gap-2">
+                        <input
+                          type="text"
+                          placeholder="Write a comment..."
+                          value={newComment}
+                          onChange={(e) => setNewComment(e.target.value)}
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              handleAddComment(post.id);
+                            }
+                          }}
+                          className="flex-1 px-3 py-2 bg-white rounded-full border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        />
+                        <button
+                          onClick={() => handleAddComment(post.id)}
+                          disabled={!newComment.trim()}
+                          className="px-4 py-2 bg-primary text-white rounded-full text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Post
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Comments List */}
+                    <div className="space-y-3 max-h-96 overflow-y-auto">
+                      {comments[post.id]?.length > 0 ? (
+                        comments[post.id].map((comment: any) => (
+                          <div key={comment.id} className="flex gap-2">
+                            <img 
+                              src={comment.authorAvatar || "https://ui-avatars.com/api/?name=User"} 
+                              alt={comment.authorName} 
+                              className="w-8 h-8 rounded-full object-cover"
+                            />
+                            <div className="flex-1 bg-white rounded-2xl px-4 py-2 border border-slate-100">
+                              <p className="font-semibold text-sm text-slate-900">{comment.authorName}</p>
+                              <p className="text-sm text-slate-700 mt-0.5">{comment.content}</p>
+                              <p className="text-xs text-slate-400 mt-1">
+                                {comment.createdAt instanceof Date 
+                                  ? comment.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                                  : 'Just now'}
+                              </p>
+                            </div>
+                          </div>
+                        ))
+                      ) : (
+                        <p className="text-center text-slate-400 text-sm py-4">
+                          No comments yet. Be the first to comment!
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
                 </div>
             ))}
             {posts.length === 0 && (

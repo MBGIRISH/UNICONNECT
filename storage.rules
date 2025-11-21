@@ -1,0 +1,108 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    
+    // Helper function to check authentication
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check file size (max 10MB)
+    function isValidSize() {
+      return request.resource.size < 10 * 1024 * 1024;
+    }
+    
+    // Helper function to check if file is an image
+    function isImage() {
+      return request.resource.contentType.matches('image/.*');
+    }
+    
+    // =========================================================================
+    // AVATARS
+    // =========================================================================
+    
+    match /avatars/{userId}/{fileName} {
+      // Anyone can read avatars
+      allow read: if true;
+      
+      // Only the user can upload their own avatar
+      allow create, update: if isSignedIn() && 
+                              request.auth.uid == userId && 
+                              isValidSize() && 
+                              isImage();
+      
+      // Only the user can delete their own avatar
+      allow delete: if isSignedIn() && request.auth.uid == userId;
+    }
+    
+    // =========================================================================
+    // POST IMAGES
+    // =========================================================================
+    
+    match /posts/{postId}/{fileName} {
+      // Anyone can read post images
+      allow read: if true;
+      
+      // Only authenticated users can upload post images
+      allow create: if isSignedIn() && 
+                      isValidSize() && 
+                      isImage();
+      
+      // Only authenticated users can delete (will be validated against post ownership in app)
+      allow delete: if isSignedIn();
+    }
+    
+    // =========================================================================
+    // EVENT COVERS
+    // =========================================================================
+    
+    match /events/{eventId}/{fileName} {
+      // Anyone can read event covers
+      allow read: if true;
+      
+      // Only authenticated users can upload event covers
+      allow create: if isSignedIn() && 
+                      isValidSize() && 
+                      isImage();
+      
+      // Only authenticated users can delete (will be validated against event host in app)
+      allow delete: if isSignedIn();
+    }
+    
+    // =========================================================================
+    // GROUP COVERS
+    // =========================================================================
+    
+    match /groups/{groupId}/{fileName} {
+      // Anyone can read group covers
+      allow read: if true;
+      
+      // Only authenticated users can upload group covers
+      allow create: if isSignedIn() && 
+                      isValidSize() && 
+                      isImage();
+      
+      // Only authenticated users can delete (will be validated against group admin in app)
+      allow delete: if isSignedIn();
+    }
+    
+    // =========================================================================
+    // MARKETPLACE IMAGES
+    // =========================================================================
+    
+    match /marketplace/{listingId}/{fileName} {
+      // Anyone can read marketplace images
+      allow read: if true;
+      
+      // Only authenticated users can upload marketplace images
+      allow create: if isSignedIn() && 
+                      isValidSize() && 
+                      isImage();
+      
+      // Only authenticated users can delete (will be validated against listing owner in app)
+      allow delete: if isSignedIn();
+    }
+  }
+}
+

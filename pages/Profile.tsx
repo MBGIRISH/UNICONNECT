@@ -1,11 +1,208 @@
-import React from 'react';
-import { MapPin, Book, Link as LinkIcon, Grid, Bookmark } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { useParams } from 'react-router-dom';
+import { MapPin, Globe, Phone, Mail, Edit2, Share2, Loader2, Upload, X, Check, MessageCircle, LogOut, AlertTriangle, Ban, MoreVertical } from 'lucide-react';
 import Header from '../components/Header';
+import { useAuth } from '../App';
+import { useNavigate } from 'react-router-dom';
+import { getUserProfile, updateUserProfile, copyProfileLink, shareProfile, uploadAndUpdateAvatar } from '../services/profileService';
+import { logout } from '../services/authService';
+import { blockUser, unblockUser, isUserBlocked } from '../services/moderationService';
+import ReportModal from '../components/ReportModal';
+import { User } from '../types';
 
 const Profile: React.FC = () => {
+  const { userId } = useParams();
+  const { user: currentUser } = useAuth();
+  const navigate = useNavigate();
+  const [profile, setProfile] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [showReportModal, setShowReportModal] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [avatarPreview, setAvatarPreview] = useState<string>('');
+  
+  const [editData, setEditData] = useState({
+    displayName: '',
+    bio: '',
+    location: '',
+    phone: '',
+    website: '',
+    twitter: '',
+    linkedin: '',
+    github: '',
+    instagram: ''
+  });
+
+  const isOwnProfile = !userId || userId === currentUser?.uid;
+
+  // Check if user is blocked
+  useEffect(() => {
+    const checkBlockStatus = async () => {
+      if (!isOwnProfile && currentUser && profile) {
+        const blocked = await isUserBlocked(currentUser.uid, profile.uid);
+        setIsBlocked(blocked);
+      }
+    };
+    
+    checkBlockStatus();
+  }, [isOwnProfile, currentUser, profile]);
+
+  useEffect(() => {
+    loadProfile();
+  }, [userId, currentUser]);
+
+  const loadProfile = async () => {
+    if (!currentUser) return;
+    
+    setLoading(true);
+    try {
+      const profileId = userId || currentUser.uid;
+      const data = await getUserProfile(profileId);
+      
+      if (data) {
+        setProfile(data);
+        setEditData({
+          displayName: data.displayName || '',
+          bio: data.bio || '',
+          location: data.location || '',
+          phone: data.phone || '',
+          website: data.website || '',
+          twitter: data.socialLinks?.twitter || '',
+          linkedin: data.socialLinks?.linkedin || '',
+          github: data.socialLinks?.github || '',
+          instagram: data.socialLinks?.instagram || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error loading profile:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAvatarFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setAvatarPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!currentUser || !profile) return;
+
+    setSaving(true);
+    try {
+      let photoURL = profile.photoURL;
+
+      // Upload new avatar if selected (using Cloudinary - free!)
+      if (avatarFile) {
+        photoURL = await uploadAndUpdateAvatar(currentUser.uid, avatarFile);
+      } else {
+        // Just update profile info
+        await updateUserProfile(currentUser.uid, {
+          displayName: editData.displayName,
+          bio: editData.bio,
+          location: editData.location,
+          phone: editData.phone,
+          website: editData.website,
+          socialLinks: {
+            twitter: editData.twitter,
+            linkedin: editData.linkedin,
+            github: editData.github,
+            instagram: editData.instagram
+          }
+        });
+      }
+
+      // Reload profile
+      await loadProfile();
+      setIsEditing(false);
+      setAvatarFile(null);
+      setAvatarPreview('');
+    } catch (error: any) {
+      console.error('Error saving profile:', error);
+      alert(error.message || 'Failed to save profile. Please try again.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleShare = async () => {
+    if (!profile) return;
+    
+    const shared = await shareProfile(profile);
+    if (!shared) {
+      // Fallback to copying link
+      const copied = await copyProfileLink(profile.uid);
+      if (copied) {
+        setLinkCopied(true);
+        setTimeout(() => setLinkCopied(false), 2000);
+      }
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      navigate('/login');
+    } catch (error) {
+      console.error('Logout error:', error);
+    }
+  };
+
+  const handleBlock = async () => {
+    if (!currentUser || !profile) return;
+    
+    try {
+      if (isBlocked) {
+        await unblockUser(currentUser.uid, profile.uid);
+        setIsBlocked(false);
+        alert('User unblocked');
+      } else {
+        await blockUser(currentUser.uid, profile.uid);
+        setIsBlocked(true);
+        alert('User blocked');
+      }
+      setShowMenu(false);
+    } catch (error) {
+      console.error('Error blocking/unblocking user:', error);
+      alert('Failed to block/unblock user');
+    }
+  };
+
+  const handleReport = () => {
+    setShowMenu(false);
+    setShowReportModal(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 flex items-center justify-center">
+        <Loader2 className="animate-spin text-indigo-600" size={48} />
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 flex items-center justify-center">
+        <p className="text-slate-600">Profile not found</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
-      <Header title="My Profile" />
+      <Header title={isOwnProfile ? "My Profile" : profile.displayName} showSearchBar={true} />
       
       <div className="max-w-4xl mx-auto md:p-6">
         <div className="bg-white md:rounded-3xl overflow-hidden shadow-sm border border-slate-100">
@@ -16,89 +213,288 @@ const Profile: React.FC = () => {
             <div className="flex flex-col md:flex-row items-start md:items-end gap-4 -mt-12 mb-6">
               <div className="relative">
                 <img 
-                  src="https://picsum.photos/seed/me/200" 
+                  src={avatarPreview || profile.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.displayName)}&background=4f46e5&color=fff`}
                   alt="Profile" 
-                  className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-white shadow-md"
+                  className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-white shadow-md object-cover"
                 />
-                <div className="absolute bottom-1 right-1 w-5 h-5 bg-green-500 border-2 border-white rounded-full"></div>
+                {isEditing && isOwnProfile && (
+                  <label className="absolute bottom-0 right-0 bg-indigo-600 text-white p-2 rounded-full cursor-pointer hover:bg-indigo-700">
+                    <Upload size={16} />
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="hidden"
+                    />
+                  </label>
+                )}
               </div>
+              
               <div className="flex-1">
-                <h1 className="text-2xl font-bold text-slate-900">Alex Johnson</h1>
-                <p className="text-slate-500 text-sm">Computer Science • Class of 2025</p>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    value={editData.displayName}
+                    onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
+                    className="text-2xl font-bold text-slate-900 border-b-2 border-indigo-500 focus:outline-none"
+                  />
+                ) : (
+                  <h1 className="text-2xl font-bold text-slate-900">{profile.displayName}</h1>
+                )}
+                <p className="text-slate-500 text-sm">{profile.email}</p>
               </div>
+              
               <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
-                <button className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50">
-                  Edit Profile
-                </button>
-                <button className="flex-1 md:flex-none bg-primary text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 shadow-lg shadow-primary/25">
-                  Share
-                </button>
+                {isOwnProfile ? (
+                  isEditing ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          setIsEditing(false);
+                          setAvatarPreview('');
+                        }}
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSave}
+                        disabled={saving}
+                        className="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                      >
+                        {saving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                        {saving ? 'Saving...' : 'Save'}
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => setIsEditing(true)}
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50 flex items-center gap-2"
+                      >
+                        <Edit2 size={16} />
+                        Edit Profile
+                      </button>
+                      <button
+                        onClick={handleShare}
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50 flex items-center gap-2"
+                      >
+                        <Share2 size={16} />
+                        {linkCopied ? 'Copied!' : 'Share'}
+                      </button>
+                      <button
+                        onClick={handleLogout}
+                        className="flex-1 md:flex-none bg-red-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-red-700 shadow-lg shadow-red-200 flex items-center gap-2"
+                      >
+                        <LogOut size={16} />
+                        Logout
+                      </button>
+                    </>
+                  )
+                ) : (
+                  <>
+                    <button
+                      onClick={() => navigate('/messages', { 
+                        state: { 
+                          userId: profile.uid, 
+                          userName: profile.displayName,
+                          userPhoto: profile.photoURL
+                        } 
+                      })}
+                      className="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center gap-2"
+                    >
+                      <MessageCircle size={16} />
+                      Message
+                    </button>
+                    <button
+                      onClick={handleShare}
+                      className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50 flex items-center gap-2"
+                    >
+                      <Share2 size={16} />
+                      {linkCopied ? 'Copied!' : 'Share'}
+                    </button>
+                    <div className="relative">
+                      <button
+                        onClick={() => setShowMenu(!showMenu)}
+                        className="p-2 hover:bg-slate-100 rounded-lg"
+                      >
+                        <MoreVertical size={20} />
+                      </button>
+                      {showMenu && (
+                        <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-2 z-10">
+                          <button
+                            onClick={handleBlock}
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+                          >
+                            <Ban size={16} />
+                            {isBlocked ? 'Unblock User' : 'Block User'}
+                          </button>
+                          <button
+                            onClick={handleReport}
+                            className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-red-600"
+                          >
+                            <AlertTriangle size={16} />
+                            Report User
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 
-            <div className="space-y-2 mb-8">
-              <p className="text-slate-700 text-sm leading-relaxed max-w-2xl">
-                Building things with code. Love hackathons, coffee, and late-night study sessions. 
-                Currently looking for team members for the Spring Capstone project! 💻☕️
-              </p>
-              <div className="flex flex-wrap gap-4 text-xs text-slate-500 mt-4">
-                <div className="flex items-center gap-1">
-                  <MapPin size={14} />
-                  Stanford University
-                </div>
-                <div className="flex items-center gap-1">
-                  <Book size={14} />
-                  CS & Economics
-                </div>
-                <div className="flex items-center gap-1 text-indigo-600">
-                  <LinkIcon size={14} />
-                  github.com/alexj
-                </div>
-              </div>
-            </div>
+            <div className="space-y-4 mb-8">
+              {isEditing ? (
+                <>
+                  <textarea
+                    value={editData.bio}
+                    onChange={(e) => setEditData({ ...editData, bio: e.target.value })}
+                    placeholder="Tell us about yourself..."
+                    className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+                    rows={3}
+                  />
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="relative">
+                      <MapPin className="absolute left-3 top-3 text-slate-400" size={18} />
+                      <input
+                        type="text"
+                        value={editData.location}
+                        onChange={(e) => setEditData({ ...editData, location: e.target.value })}
+                        placeholder="Location"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-3 text-slate-400" size={18} />
+                      <input
+                        type="tel"
+                        value={editData.phone}
+                        onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
+                        placeholder="Phone"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                    
+                    <div className="relative md:col-span-2">
+                      <Globe className="absolute left-3 top-3 text-slate-400" size={18} />
+                      <input
+                        type="url"
+                        value={editData.website}
+                        onChange={(e) => setEditData({ ...editData, website: e.target.value })}
+                        placeholder="Website"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
 
-            {/* Stats */}
-            <div className="flex gap-8 border-y border-slate-100 py-4 mb-6">
-              <div className="text-center">
-                <span className="block font-bold text-slate-900">1,240</span>
-                <span className="text-xs text-slate-500">Followers</span>
-              </div>
-              <div className="text-center">
-                <span className="block font-bold text-slate-900">580</span>
-                <span className="text-xs text-slate-500">Following</span>
-              </div>
-              <div className="text-center">
-                <span className="block font-bold text-slate-900">45</span>
-                <span className="text-xs text-slate-500">Events</span>
-              </div>
-            </div>
+                  <div className="border-t border-slate-200 pt-4">
+                    <h3 className="font-semibold text-slate-700 mb-3">Social Links</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <input
+                        type="text"
+                        value={editData.twitter}
+                        onChange={(e) => setEditData({ ...editData, twitter: e.target.value })}
+                        placeholder="Twitter username"
+                        className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <input
+                        type="text"
+                        value={editData.linkedin}
+                        onChange={(e) => setEditData({ ...editData, linkedin: e.target.value })}
+                        placeholder="LinkedIn URL"
+                        className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <input
+                        type="text"
+                        value={editData.github}
+                        onChange={(e) => setEditData({ ...editData, github: e.target.value })}
+                        placeholder="GitHub username"
+                        className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                      <input
+                        type="text"
+                        value={editData.instagram}
+                        onChange={(e) => setEditData({ ...editData, instagram: e.target.value })}
+                        placeholder="Instagram username"
+                        className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {profile.bio && (
+                    <p className="text-slate-700 text-sm leading-relaxed">{profile.bio}</p>
+                  )}
+                  
+                  <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+                    {profile.location && (
+                      <div className="flex items-center gap-1">
+                        <MapPin size={14} />
+                        {profile.location}
+                      </div>
+                    )}
+                    {profile.phone && (
+                      <div className="flex items-center gap-1">
+                        <Phone size={14} />
+                        {profile.phone}
+                      </div>
+                    )}
+                    {profile.website && (
+                      <div className="flex items-center gap-1 text-indigo-600">
+                        <Globe size={14} />
+                        <a href={profile.website} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                          {profile.website}
+                        </a>
+                      </div>
+                    )}
+                  </div>
 
-            {/* Content Tabs */}
-            <div className="flex justify-center gap-8 border-b border-slate-100 mb-6">
-              <button className="flex items-center gap-2 pb-3 border-b-2 border-primary text-primary font-medium text-sm">
-                <Grid size={18} />
-                Posts
-              </button>
-              <button className="flex items-center gap-2 pb-3 border-b-2 border-transparent text-slate-400 font-medium text-sm hover:text-slate-600">
-                <Bookmark size={18} />
-                Saved
-              </button>
-            </div>
-
-            {/* Grid */}
-            <div className="grid grid-cols-3 gap-1 md:gap-4">
-               {[1,2,3,4,5,6].map(i => (
-                 <img 
-                   key={i} 
-                   src={`https://picsum.photos/seed/post${i}/400/400`} 
-                   alt="Post" 
-                   className="aspect-square object-cover rounded-lg hover:opacity-90 cursor-pointer"
-                 />
-               ))}
+                  {profile.socialLinks && (
+                    <div className="flex flex-wrap gap-3 pt-2">
+                      {profile.socialLinks.twitter && (
+                        <a
+                          href={`https://twitter.com/${profile.socialLinks.twitter}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                        >
+                          @{profile.socialLinks.twitter}
+                        </a>
+                      )}
+                      {profile.socialLinks.github && (
+                        <a
+                          href={`https://github.com/${profile.socialLinks.github}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-indigo-600 hover:text-indigo-700 text-sm font-medium"
+                        >
+                          GitHub
+                        </a>
+                      )}
+                    </div>
+                  )}
+                </>
+              )}
             </div>
           </div>
         </div>
       </div>
+
+      {/* Report Modal */}
+      {showReportModal && profile && (
+        <ReportModal
+          isOpen={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          type="user"
+          targetId={profile.uid}
+          targetUserId={profile.uid}
+          targetName={profile.displayName}
+        />
+      )}
     </div>
   );
 };
