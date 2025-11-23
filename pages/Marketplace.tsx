@@ -43,39 +43,7 @@ const Marketplace: React.FC = () => {
         if (fetchedItems.length > 0) {
           setItems(fetchedItems);
         } else {
-          // Show demo items
-          setItems([
-            {
-              id: 'demo-1',
-              title: 'Calculus Textbook',
-              price: 45,
-              description: 'Used for one semester, excellent condition with all chapters included',
-              sellerId: 'demo',
-              sellerName: 'John D.',
-              sellerAvatar: 'https://ui-avatars.com/api/?name=John+D',
-              images: ['https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=400'],
-              condition: 'Good',
-              category: 'Books',
-              isSold: false,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            },
-            {
-              id: 'demo-2',
-              title: 'Gaming Laptop',
-              price: 650,
-              description: 'Perfect for students! i5 processor, 16GB RAM, 512GB SSD',
-              sellerId: 'demo2',
-              sellerName: 'Sarah M.',
-              sellerAvatar: 'https://ui-avatars.com/api/?name=Sarah+M',
-              images: ['https://images.unsplash.com/photo-1603302576837-37561b2e2302?w=400'],
-              condition: 'Like New',
-              category: 'Electronics',
-              isSold: false,
-              createdAt: new Date(),
-              updatedAt: new Date()
-            }
-          ]);
+          setItems([]);
         }
     } catch (e) {
         console.error("Error fetching marketplace items:", e);
@@ -247,10 +215,10 @@ const Marketplace: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64">
       <Header title="Marketplace" />
       
-      <div className="max-w-6xl mx-auto p-4">
+      <div className="max-w-6xl mx-auto p-4 md:px-6">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-lg font-semibold text-slate-800 hidden md:block">Browse Listings</h2>
           <div className="flex gap-3 w-full md:w-auto justify-end">
@@ -325,7 +293,7 @@ const Marketplace: React.FC = () => {
 
       {/* Sell Item Modal */}
       {showSellModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 md:p-6">
           <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
               <h2 className="text-xl font-bold text-slate-800">Sell an Item</h2>
@@ -479,7 +447,7 @@ const Marketplace: React.FC = () => {
       {/* Item Detail Modal */}
       {showDetailModal && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4 md:m-0">
             <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
               <h2 className="text-xl font-bold text-slate-800">Item Details</h2>
               <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-slate-600">
@@ -566,7 +534,7 @@ const Marketplace: React.FC = () => {
       {/* Message Modal */}
       {showMessageModal && selectedItem && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-md h-[600px] flex flex-col">
+          <div className="bg-white rounded-3xl w-full max-w-md h-[600px] flex flex-col m-4 md:m-0">
             <div className="p-6 border-b border-slate-100 flex items-center gap-3">
               <button onClick={() => setShowMessageModal(false)} className="text-slate-400 hover:text-slate-600">
                 <ArrowLeft size={24}/>

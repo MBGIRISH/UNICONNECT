@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Sparkles, Loader2, Upload } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Loader2, Upload, GraduationCap } from 'lucide-react';
 import { Post } from '../types';
 import Header from '../components/Header';
-import { generatePostContent } from '../services/geminiService';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
 import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, increment, getDoc, getDocs } from 'firebase/firestore';
@@ -10,7 +9,6 @@ import { uploadPostImages } from '../services/cloudinaryService';
 
 const Feed: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
-  const [isGenerating, setIsGenerating] = useState(false);
   const [newPostText, setNewPostText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
@@ -39,14 +37,14 @@ const Feed: React.FC = () => {
             setIsLoading(false);
             }, (error) => {
                 console.error("Error fetching posts:", error);
-                loadMockPosts();
+                setPosts([]);
             });
         } else {
-            loadMockPosts();
+            setPosts([]);
         }
     } catch (e) {
         console.error("Feed Init Error:", e);
-        loadMockPosts();
+        setPosts([]);
     }
 
     return () => {
@@ -54,41 +52,6 @@ const Feed: React.FC = () => {
     };
   }, []);
 
-  const loadMockPosts = () => {
-      setPosts([
-            {
-                id: 'mock-1',
-                authorId: '1',
-                authorName: 'Campus Admin',
-                authorAvatar: 'https://ui-avatars.com/api/?name=Admin&background=4f46e5&color=fff',
-                content: '👋 Welcome to UniConnect! \n\nIf you see this, we are running in Demo Mode or offline.',
-                likesCount: 100,
-                commentsCount: 12,
-                createdAt: new Date(),
-                updatedAt: new Date()
-            },
-            {
-                id: 'mock-2',
-                authorId: '2',
-                authorName: 'Sarah Student',
-                authorAvatar: 'https://ui-avatars.com/api/?name=Sarah',
-                content: 'Just finished my final project! 📚☕️ #CSLife',
-                imageUrls: ['https://picsum.photos/seed/study/800/400'],
-                likesCount: 24,
-                commentsCount: 3,
-                createdAt: new Date(),
-                updatedAt: new Date()
-            }
-      ]);
-      setIsLoading(false);
-  }
-
-  const handleMagicWrite = async () => {
-    setIsGenerating(true);
-    const generated = await generatePostContent("studying hard for finals with coffee");
-    setNewPostText(generated);
-    setIsGenerating(false);
-  };
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -121,10 +84,22 @@ const Feed: React.FC = () => {
       }
 
       if (db) {
+          // Fetch user's college from their profile
+          let userCollege = '';
+          try {
+            const userDoc = await getDoc(doc(db, 'users', user.uid));
+            if (userDoc.exists()) {
+              userCollege = userDoc.data()?.college || '';
+            }
+          } catch (error) {
+            console.error('Error fetching user college:', error);
+          }
+
           await addDoc(collection(db, "posts"), {
             authorId: user.uid,
             authorName: user.displayName || 'Student',
             authorAvatar: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Student')}`,
+            authorCollege: userCollege,
             content: newPostText,
             imageUrls: imageUrls,
             likesCount: 0,
@@ -255,10 +230,10 @@ const Feed: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64">
       <Header title="Campus Feed" />
       
-      <div className="max-w-2xl mx-auto pt-4 px-4">
+      <div className="max-w-2xl mx-auto pt-4 px-4 md:px-6">
         {/* Create Post Widget */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6">
           <div className="flex gap-3 mb-3">
@@ -302,14 +277,6 @@ const Feed: React.FC = () => {
                   className="hidden"
                 />
               </label>
-              <button 
-                onClick={handleMagicWrite}
-                className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-purple-600 bg-purple-50 hover:bg-purple-100 rounded-full transition-colors"
-                disabled={isGenerating}
-              >
-                <Sparkles size={14} />
-                {isGenerating ? 'Magic...' : 'AI Assist'}
-              </button>
             </div>
             <button 
                 onClick={handlePost}
@@ -338,8 +305,14 @@ const Feed: React.FC = () => {
                 <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                     <img src={post.authorAvatar} alt={post.authorName} className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-50" />
-                    <div>
-                        <h3 className="font-semibold text-slate-900 text-sm">{post.authorName}</h3>
+                    <div className="min-w-0 flex-1">
+                        <h3 className="font-semibold text-slate-900 text-sm truncate">{post.authorName}</h3>
+                        {post.authorCollege && (
+                          <div className="flex items-center gap-1 text-xs text-indigo-600 font-medium truncate">
+                            <GraduationCap size={12} className="flex-shrink-0" />
+                            <span className="truncate">{post.authorCollege}</span>
+                          </div>
+                        )}
                         <p className="text-xs text-slate-500">
                             {post.createdAt instanceof Date ? post.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Recent'}
                         </p>

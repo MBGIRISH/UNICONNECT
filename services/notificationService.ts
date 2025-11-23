@@ -191,3 +191,25 @@ export const notifyMarketplaceInquiry = async (
   );
 };
 
+// Simple addNotification function for general use
+export const addNotification = async (
+  userId: string,
+  notification: {
+    type: string;
+    message: string;
+    createdAt: Date;
+    title?: string;
+    link?: string;
+  }
+): Promise<void> => {
+  await addDoc(collection(db, `users/${userId}/notifications`), {
+    userId,
+    type: notification.type,
+    title: notification.title || 'Notification',
+    message: notification.message,
+    link: notification.link || null,
+    read: false,
+    createdAt: serverTimestamp()
+  });
+};
+

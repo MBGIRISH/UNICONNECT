@@ -7,9 +7,11 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
-    "init-db": "npx tsx initFirebase.ts"
+    "init-db": "npx tsx initFirebase.ts",
+    "cleanup-test-data": "npx tsx scripts/cleanup-test-data.ts"
   },
   "dependencies": {
+    "@emailjs/browser": "^4.4.1",
     "@google/generative-ai": "^0.21.0",
     "firebase": "^10.8.0",
     "lucide-react": "0.344.0",

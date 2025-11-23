@@ -64,25 +64,7 @@ const Messages: React.FC = () => {
   // Load conversations
   useEffect(() => {
     if (!currentUser || !db) {
-      // Demo conversations
-      setConversations([
-        {
-          userId: 'demo1',
-          userName: 'John Doe',
-          userPhoto: 'https://ui-avatars.com/api/?name=John+Doe',
-          lastMessage: 'Hey! How are you?',
-          lastMessageTime: new Date(),
-          unread: 2
-        },
-        {
-          userId: 'demo2',
-          userName: 'Jane Smith',
-          userPhoto: 'https://ui-avatars.com/api/?name=Jane+Smith',
-          lastMessage: 'Thanks for the help!',
-          lastMessageTime: new Date(Date.now() - 3600000),
-          unread: 0
-        }
-      ]);
+      setConversations([]);
       return;
     }
 
@@ -92,14 +74,20 @@ const Messages: React.FC = () => {
         where('senderId', '==', currentUser.uid),
         where('receiverId', '==', currentUser.uid)
       ),
-      orderBy('createdAt', 'desc'),
-      limit(50)
+      limit(100) // Increased limit since we filter client-side
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const convMap = new Map<string, Conversation>();
       
-      snapshot.forEach((doc) => {
+      // Sort docs client-side since we removed orderBy
+      const docs = snapshot.docs.sort((a, b) => {
+        const timeA = a.data().createdAt?.toMillis?.() || 0;
+        const timeB = b.data().createdAt?.toMillis?.() || 0;
+        return timeB - timeA; // Descending
+      });
+
+      docs.forEach((doc) => {
         const msg = doc.data();
         const otherUserId = msg.senderId === currentUser.uid ? msg.receiverId : msg.senderId;
         
@@ -121,40 +109,19 @@ const Messages: React.FC = () => {
     return () => unsubscribe();
   }, [currentUser]);
 
-  // Load messages for selected user
-  useEffect(() => {
-    if (!selectedUser || !currentUser || !db) {
-      if (selectedUser) {
-        // Demo messages
-        setMessages([
-          {
-            id: '1',
-            text: 'Hey! How are you?',
-            senderId: selectedUser.id,
-            receiverId: currentUser?.uid || 'demo',
-            createdAt: new Date(Date.now() - 7200000),
-            read: true
-          },
-          {
-            id: '2',
-            text: 'I\'m good, thanks! How about you?',
-            senderId: currentUser?.uid || 'demo',
-            receiverId: selectedUser.id,
-            createdAt: new Date(Date.now() - 3600000),
-            read: true
+        // Load messages for selected user
+        useEffect(() => {
+          if (!selectedUser || !currentUser || !db) {
+            setMessages([]);
+            return;
           }
-        ]);
-      }
-      return;
-    }
 
     const q = query(
       collection(db, 'messages'),
       or(
         where('senderId', '==', currentUser.uid),
         where('receiverId', '==', currentUser.uid)
-      ),
-      orderBy('createdAt', 'asc')
+      )
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
@@ -173,6 +140,14 @@ const Messages: React.FC = () => {
           }
         }
       });
+
+      // Sort messages by time (ascending)
+      msgs.sort((a, b) => {
+        const timeA = a.createdAt?.toMillis?.() || 0;
+        const timeB = b.createdAt?.toMillis?.() || 0;
+        return timeA - timeB;
+      });
+
       setMessages(msgs);
       scrollToBottom();
     });
@@ -202,12 +177,8 @@ const Messages: React.FC = () => {
       if (db) {
         await addDoc(collection(db, 'messages'), messageData);
       } else {
-        // Demo mode
-        setMessages([...messages, {
-          id: Date.now().toString(),
-          ...messageData,
-          createdAt: new Date()
-        } as Message]);
+        console.error('Database not available');
+        alert('Cannot send message. Please check your connection.');
       }
       setNewMessage('');
       scrollToBottom();
@@ -340,7 +311,7 @@ const Messages: React.FC = () => {
       {/* Messages */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
         {messages.map((msg) => {
-          const isMine = msg.senderId === (currentUser?.uid || 'demo');
+          const isMine = msg.senderId === currentUser?.uid;
           return (
             <div 
               key={msg.id}

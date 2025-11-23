@@ -10,8 +10,8 @@ import {
   orderBy, 
   onSnapshot, 
   serverTimestamp,
-  where,
-  getDocs
+  doc,
+  getDoc
 } from 'firebase/firestore';
 
 interface Resource {
@@ -51,8 +51,27 @@ const Resources: React.FC = () => {
   const [file, setFile] = useState<File | null>(null);
 
   const departments = [
-    'All', 'Computer Science', 'Electronics', 'Mechanical', 'Civil', 
-    'Electrical', 'Chemical', 'Biotechnology', 'Mathematics', 'Physics', 'Chemistry'
+    'All', 
+    'Computer Science', 
+    'Artificial Intelligence & Machine Learning (AIML)', 
+    'Information Science & Engineering (ISE)', 
+    'Cyber Security', 
+    'Electronics & Communication', 
+    'Electronics', 
+    'Mechanical', 
+    'Civil', 
+    'Electrical', 
+    'Chemical', 
+    'Biotechnology', 
+    'Aerospace', 
+    'Automobile', 
+    'Industrial', 
+    'Telecommunication', 
+    'Instrumentation', 
+    'Mathematics', 
+    'Physics', 
+    'Chemistry',
+    'Other'
   ];
 
   const years = ['All', '1st Year', '2nd Year', '3rd Year', '4th Year'];
@@ -127,9 +146,21 @@ const Resources: React.FC = () => {
     setUploading(true);
 
     try {
+      if (!user || !user.uid) {
+        throw new Error('You must be logged in to upload resources');
+      }
+
       // Get user profile for uploader info
-      const userDoc = await getDocs(query(collection(db, 'users'), where('__name__', '==', user?.uid)));
-      const userData = userDoc.docs[0]?.data();
+      let userData: any = null;
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          userData = userDoc.data();
+        }
+      } catch (userError) {
+        console.warn('Could not fetch user data:', userError);
+        // Continue with default values
+      }
 
       // Upload file to Cloudinary as raw file (PDF)
       const formData = new FormData();
@@ -137,7 +168,12 @@ const Resources: React.FC = () => {
       formData.append('upload_preset', 'uniconnect_uploads');
       formData.append('folder', 'uniconnect/resources');
       formData.append('resource_type', 'raw'); // Explicitly set resource type for PDFs
-      formData.append('format', 'pdf');
+
+      console.log('Uploading to Cloudinary...', {
+        fileName: file.name,
+        fileSize: file.size,
+        fileType: file.type
+      });
 
       const cloudinaryResponse = await fetch(
         `https://api.cloudinary.com/v1_1/dlnlwudgr/raw/upload`,
@@ -148,13 +184,25 @@ const Resources: React.FC = () => {
       );
 
       if (!cloudinaryResponse.ok) {
-        const errorData = await cloudinaryResponse.json();
-        console.error('Cloudinary upload error:', errorData);
-        throw new Error(`Failed to upload file: ${errorData.error?.message || 'Unknown error'}`);
+        let errorMessage = 'Failed to upload file';
+        try {
+          const errorData = await cloudinaryResponse.json();
+          console.error('Cloudinary upload error:', errorData);
+          errorMessage = errorData.error?.message || errorData.message || errorMessage;
+        } catch (parseError) {
+          const errorText = await cloudinaryResponse.text();
+          console.error('Cloudinary error response:', errorText);
+          errorMessage = `Upload failed: ${cloudinaryResponse.status} ${cloudinaryResponse.statusText}`;
+        }
+        throw new Error(errorMessage);
       }
 
       const cloudinaryData = await cloudinaryResponse.json();
       
+      if (!cloudinaryData.secure_url) {
+        throw new Error('Upload succeeded but no URL returned');
+      }
+
       console.log('Cloudinary upload successful:', cloudinaryData.secure_url);
 
       // Save resource metadata to Firestore
@@ -167,9 +215,9 @@ const Resources: React.FC = () => {
         department,
         year,
         subject,
-        uploadedBy: user?.uid,
-        uploaderName: userData?.displayName || 'Anonymous',
-        uploaderPhoto: userData?.photoURL || '',
+        uploadedBy: user.uid,
+        uploaderName: userData?.displayName || user.displayName || 'Anonymous',
+        uploaderPhoto: userData?.photoURL || user.photoURL || '',
         createdAt: serverTimestamp(),
         downloads: 0,
       });
@@ -184,10 +232,11 @@ const Resources: React.FC = () => {
       setSubject('');
       setFile(null);
       setShowUploadModal(false);
-      alert('Resource uploaded successfully!');
-    } catch (error) {
+      alert('Resource uploaded successfully! 🎉');
+    } catch (error: any) {
       console.error('Error uploading resource:', error);
-      alert('Failed to upload resource. Please try again.');
+      const errorMessage = error.message || 'Failed to upload resource. Please try again.';
+      alert(`Error: ${errorMessage}`);
     } finally {
       setUploading(false);
     }
@@ -213,10 +262,10 @@ const Resources: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64">
       <Header title="Resources" />
-
-      <div className="max-w-6xl mx-auto p-4 space-y-4">
+      
+      <div className="max-w-6xl mx-auto p-4 md:px-6 space-y-4">
         {/* Search and Filter Bar */}
         <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
           <div className="flex flex-col md:flex-row gap-3">
@@ -389,7 +438,7 @@ const Resources: React.FC = () => {
 
       {/* Upload Modal */}
       {showUploadModal && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 md:p-6">
           <div className="bg-white rounded-3xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-slate-100 flex items-center justify-between sticky top-0 bg-white">
               <h2 className="text-xl font-bold text-slate-900">Upload Resource</h2>

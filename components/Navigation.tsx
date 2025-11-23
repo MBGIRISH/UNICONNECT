@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, Calendar, ShoppingBag, Users, User, PlusCircle, Clock, BookOpen } from 'lucide-react';
+import { Home, Calendar, ShoppingBag, Users, User, PlusCircle, Clock, BookOpen, MessageCircle } from 'lucide-react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 
 const Navigation: React.FC = () => {
@@ -13,6 +13,7 @@ const Navigation: React.FC = () => {
     { icon: Calendar, label: 'Events', path: '/events' },
     { icon: Clock, label: 'Timetable', path: '/timetable' },
     { icon: Users, label: 'Groups', path: '/groups' },
+    { icon: MessageCircle, label: 'Messages', path: '/messages' },
     { icon: ShoppingBag, label: 'Market', path: '/marketplace' },
     { icon: BookOpen, label: 'Resources', path: '/resources' },
     { icon: User, label: 'Profile', path: '/profile' },
@@ -58,18 +59,18 @@ const Navigation: React.FC = () => {
       </nav>
 
       {/* Mobile Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-6 py-3 z-50 pb-safe">
-        <div className="flex justify-between items-center">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-50 pb-safe">
+        <div className="flex justify-around items-center">
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center gap-1 ${
+              className={`flex flex-col items-center gap-0.5 min-w-0 flex-1 ${
                 isActive(item.path) ? 'text-primary' : 'text-slate-400'
               }`}
             >
-              <item.icon size={24} strokeWidth={isActive(item.path) ? 2.5 : 2} />
-              <span className="text-[10px] font-medium">{item.label}</span>
+              <item.icon size={20} strokeWidth={isActive(item.path) ? 2.5 : 2} />
+              <span className="text-[9px] font-medium truncate w-full text-center">{item.label}</span>
             </Link>
           ))}
         </div>

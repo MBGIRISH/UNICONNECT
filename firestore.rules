@@ -2,7 +2,13 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Simple rule: Allow all reads and writes for authenticated users
+    // Password reset codes - allow read/write for anyone (needed for password reset flow)
+    // Users are NOT authenticated during password reset, so they need to read codes
+    match /passwordResetCodes/{email} {
+      allow read, write: if true; // Anyone can read/write reset codes (needed for password reset)
+    }
+    
+    // All other collections - require authentication
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

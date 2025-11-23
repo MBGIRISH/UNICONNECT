@@ -9,7 +9,11 @@ export interface User {
   displayName: string;
   photoURL?: string;
   bio?: string;
+  college?: string; // User's college/university
   location?: string;
+  latitude?: number; // User's location coordinates
+  longitude?: number;
+  city?: string; // User's city
   phone?: string;
   website?: string;
   socialLinks?: {
@@ -32,6 +36,7 @@ export interface Post {
   authorId: string;
   authorName: string;
   authorAvatar?: string;
+  authorCollege?: string; // NEW: Author's college
   content: string;
   imageUrls?: string[];
   groupId?: string; // If posted in a group
@@ -67,6 +72,11 @@ export interface Event {
   title: string;
   description: string;
   location: string;
+  college?: string; // College where event is hosted
+  latitude?: number; // Location coordinates for distance calculation
+  longitude?: number;
+  city?: string; // City name for display
+  address?: string; // Full address from Google Maps
   startTime: Timestamp | Date;
   endTime: Timestamp | Date;
   hostId: string;

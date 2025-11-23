@@ -1,9 +1,127 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Globe, Phone, Loader2, Upload, X } from 'lucide-react';
+import { MapPin, Globe, Phone, Loader2, Upload, X, GraduationCap } from 'lucide-react';
 import { auth } from '../firebaseConfig';
 import { updateUserProfile } from '../services/profileService';
 import { uploadAndUpdateAvatar } from '../services/profileService';
+
+// Comprehensive colleges list - ALL IITs, NITs, and Karnataka Engineering Colleges
+const POPULAR_COLLEGES = [
+  // === ALL IITs (23) ===
+  'IIT Bombay',
+  'IIT Delhi',
+  'IIT Madras',
+  'IIT Kanpur',
+  'IIT Kharagpur',
+  'IIT Roorkee',
+  'IIT Guwahati',
+  'IIT Hyderabad',
+  'IIT Indore',
+  'IIT Bhubaneswar',
+  'IIT Gandhinagar',
+  'IIT Patna',
+  'IIT Ropar',
+  'IIT Mandi',
+  'IIT (BHU) Varanasi',
+  'IIT Jodhpur',
+  'IIT Bhilai',
+  'IIT Goa',
+  'IIT Jammu',
+  'IIT Dharwad',
+  'IIT Palakkad',
+  'IIT Tirupati',
+  'IIT (ISM) Dhanbad',
+  
+  // === ALL NITs (31) ===
+  'NIT Trichy (Tiruchirappalli)',
+  'NIT Surathkal (Karnataka)',
+  'NIT Warangal',
+  'NIT Calicut',
+  'NIT Rourkela',
+  'NIT Durgapur',
+  'NIT Jaipur',
+  'NIT Kurukshetra',
+  'NIT Nagpur',
+  'NIT Silchar',
+  'NIT Hamirpur',
+  'NIT Jalandhar',
+  'NIT Raipur',
+  'NIT Allahabad (Prayagraj)',
+  'NIT Bhopal',
+  'NIT Jamshedpur',
+  'NIT Patna',
+  'NIT Surat',
+  'NIT Agartala',
+  'NIT Arunachal Pradesh',
+  'NIT Delhi',
+  'NIT Goa',
+  'NIT Manipur',
+  'NIT Meghalaya',
+  'NIT Mizoram',
+  'NIT Nagaland',
+  'NIT Puducherry',
+  'NIT Sikkim',
+  'NIT Srinagar',
+  'NIT Uttarakhand',
+  'NIT Andhra Pradesh',
+  
+  // === KARNATAKA ENGINEERING COLLEGES ===
+  'RV College of Engineering (RVCE), Bangalore',
+  'BMS College of Engineering, Bangalore',
+  'MS Ramaiah Institute of Technology, Bangalore',
+  'PES University, Bangalore',
+  'Dayananda Sagar College of Engineering, Bangalore',
+  'BMS Institute of Technology, Bangalore',
+  'Sir M Visvesvaraya Institute of Technology (MVIT), Bangalore',
+  'Bangalore Institute of Technology (BIT)',
+  'JSS Science and Technology University, Mysore',
+  'Manipal Institute of Technology, Manipal',
+  'NMAM Institute of Technology, Nitte',
+  'KLE Technological University, Hubballi',
+  'Nitte Meenakshi Institute of Technology, Bangalore',
+  'CMR Institute of Technology, Bangalore',
+  'New Horizon College of Engineering, Bangalore',
+  'Acharya Institute of Technology, Bangalore',
+  'Oxford College of Engineering, Bangalore',
+  'SJB Institute of Technology, Bangalore',
+  'RNS Institute of Technology, Bangalore',
+  'Global Academy of Technology, Bangalore',
+  'REVA University, Bangalore',
+  'Jain University, Bangalore',
+  'Christ University, Bangalore',
+  'NIE Institute of Technology, Mysore',
+  'Siddaganga Institute of Technology, Tumkur',
+  'Gogte Institute of Technology, Belgaum',
+  'SDM College of Engineering and Technology, Dharwad',
+  'Basaveshwar Engineering College, Bagalkot',
+  'KLS Vishwanathrao Deshpande Rural Institute, Haliyal',
+  'Sahyadri College of Engineering, Mangalore',
+  
+  // === OTHER PREMIER INSTITUTES ===
+  'BITS Pilani',
+  'BITS Goa',
+  'BITS Hyderabad',
+  'IIIT Bangalore',
+  'IIIT Hyderabad',
+  'IIIT Allahabad',
+  'VIT Vellore',
+  'VIT Chennai',
+  'VIT Bhopal',
+  'VIT Andhra Pradesh',
+  'SRM Institute of Science and Technology, Chennai',
+  'Amity University',
+  'Thapar Institute of Engineering and Technology',
+  'Delhi Technological University (DTU)',
+  'Netaji Subhas University of Technology (NSUT), Delhi',
+  'Anna University, Chennai',
+  'PSG College of Technology, Coimbatore',
+  'Jadavpur University, Kolkata',
+  'College of Engineering Pune (COEP)',
+  'Veermata Jijabai Technological Institute (VJTI), Mumbai',
+  
+  // === CUSTOM OPTION ===
+  'Other (Enter Your College)'
+];
 
 const Onboarding: React.FC = () => {
   const [step, setStep] = useState(1);
@@ -11,6 +129,8 @@ const Onboarding: React.FC = () => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string>('');
   const [formData, setFormData] = useState({
+    college: '',
+    customCollege: '',
     bio: '',
     location: '',
     phone: '',
@@ -37,7 +157,16 @@ const Onboarding: React.FC = () => {
   };
 
   const handleNext = () => {
-    if (step < 3) {
+    // Validate step 2 (college selection) before proceeding
+    if (step === 2) {
+      const finalCollege = formData.college === 'Other (Enter Your College)' ? formData.customCollege : formData.college;
+      if (!finalCollege || finalCollege.trim() === '') {
+        alert('Please select or enter your college before continuing.');
+        return;
+      }
+    }
+    
+    if (step < 4) {
       setStep(step + 1);
     }
   };
@@ -48,22 +177,33 @@ const Onboarding: React.FC = () => {
     }
   };
 
-  const handleSkip = () => {
-    navigate('/');
-  };
 
   const handleComplete = async () => {
     if (!user) return;
 
     setLoading(true);
     try {
-      // Upload avatar if provided (using Cloudinary - free!)
+      // Upload avatar if provided (optional - don't fail if upload fails)
       if (avatarFile) {
-        await uploadAndUpdateAvatar(user.uid, avatarFile);
+        try {
+          await uploadAndUpdateAvatar(user.uid, avatarFile);
+        } catch (avatarError: any) {
+          console.warn('Avatar upload failed, continuing without avatar:', avatarError);
+          // Continue without avatar - user can add it later
+        }
+      }
+
+      // Determine final college name
+      const finalCollege = formData.college === 'Other (Enter Your College)' ? formData.customCollege : formData.college;
+
+      // Validate required fields
+      if (!finalCollege || finalCollege.trim() === '') {
+        throw new Error('Please select or enter your college');
       }
 
       // Update other profile fields
       await updateUserProfile(user.uid, {
+        college: finalCollege,
         bio: formData.bio,
         location: formData.location,
         phone: formData.phone,
@@ -91,9 +231,9 @@ const Onboarding: React.FC = () => {
         {/* Header */}
         <div className="bg-indigo-600 p-6 text-white">
           <h1 className="text-2xl font-bold">Complete Your Profile</h1>
-          <p className="text-indigo-100 mt-1">Step {step} of 3</p>
+          <p className="text-indigo-100 mt-1">Step {step} of 4</p>
           <div className="mt-4 flex gap-2">
-            {[1, 2, 3].map((s) => (
+            {[1, 2, 3, 4].map((s) => (
               <div
                 key={s}
                 className={`flex-1 h-2 rounded-full ${
@@ -153,8 +293,59 @@ const Onboarding: React.FC = () => {
             </div>
           )}
 
-          {/* Step 2: Basic Info */}
+          {/* Step 2: College Selection */}
           {step === 2 && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <h2 className="text-xl font-bold text-slate-900 mb-2">Choose Your College</h2>
+                <p className="text-slate-500">This helps you connect with your campus community</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="relative">
+                  <GraduationCap className="absolute left-3 top-3.5 text-slate-400" size={20} />
+                  <select
+                    value={formData.college}
+                    onChange={(e) => setFormData({ ...formData, college: e.target.value, customCollege: '' })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none"
+                  >
+                    <option value="">Select your college...</option>
+                    {POPULAR_COLLEGES.map((college) => (
+                      <option key={college} value={college}>
+                        {college}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {formData.college === 'Other (Enter Your College)' && (
+                  <div className="relative">
+                    <GraduationCap className="absolute left-3 top-3.5 text-slate-400" size={20} />
+                    <input
+                      type="text"
+                      value={formData.customCollege}
+                      onChange={(e) => setFormData({ ...formData, customCollege: e.target.value })}
+                      placeholder="Enter your college name"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
+                )}
+
+                <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800">
+                  <p className="font-medium mb-1">🎓 Why choose a college?</p>
+                  <ul className="text-xs space-y-1 text-indigo-700">
+                    <li>• See events at your campus first</li>
+                    <li>• Connect with your classmates</li>
+                    <li>• Find study groups at your college</li>
+                    <li>• Discover nearby events at other colleges</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Step 3: Basic Info */}
+          {step === 3 && (
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-xl font-bold text-slate-900 mb-2">Tell us about yourself</h2>
@@ -211,8 +402,8 @@ const Onboarding: React.FC = () => {
             </div>
           )}
 
-          {/* Step 3: Social Links */}
-          {step === 3 && (
+          {/* Step 4: Social Links */}
+          {step === 4 && (
             <div className="space-y-6">
               <div className="text-center">
                 <h2 className="text-xl font-bold text-slate-900 mb-2">Connect Your Socials</h2>
@@ -266,19 +457,12 @@ const Onboarding: React.FC = () => {
               </button>
             )}
 
-            <button
-              onClick={handleSkip}
-              className="flex-1 px-6 py-3 border-2 border-slate-200 text-slate-700 rounded-xl font-semibold hover:bg-slate-50 transition-colors"
-            >
-              Skip
-            </button>
-
-            {step < 3 ? (
+            {step < 4 ? (
               <button
                 onClick={handleNext}
                 className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-xl font-semibold hover:bg-indigo-700 transition-colors"
               >
-                Next
+                Continue
               </button>
             ) : (
               <button
@@ -292,7 +476,7 @@ const Onboarding: React.FC = () => {
                     Saving...
                   </>
                 ) : (
-                  'Complete'
+                  'Save'
                 )}
               </button>
             )}

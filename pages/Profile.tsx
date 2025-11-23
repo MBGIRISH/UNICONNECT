@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
-import { MapPin, Globe, Phone, Mail, Edit2, Share2, Loader2, Upload, X, Check, MessageCircle, LogOut, AlertTriangle, Ban, MoreVertical } from 'lucide-react';
+import { MapPin, Globe, Phone, Mail, Edit2, Share2, Loader2, Upload, X, Check, MessageCircle, LogOut, AlertTriangle, Ban, MoreVertical, GraduationCap } from 'lucide-react';
 import Header from '../components/Header';
 import { useAuth } from '../App';
 import { useNavigate } from 'react-router-dom';
@@ -9,6 +9,124 @@ import { logout } from '../services/authService';
 import { blockUser, unblockUser, isUserBlocked } from '../services/moderationService';
 import ReportModal from '../components/ReportModal';
 import { User } from '../types';
+
+// Comprehensive colleges list - ALL IITs, NITs, and Karnataka Engineering Colleges
+const POPULAR_COLLEGES = [
+  // === ALL IITs (23) ===
+  'IIT Bombay',
+  'IIT Delhi',
+  'IIT Madras',
+  'IIT Kanpur',
+  'IIT Kharagpur',
+  'IIT Roorkee',
+  'IIT Guwahati',
+  'IIT Hyderabad',
+  'IIT Indore',
+  'IIT Bhubaneswar',
+  'IIT Gandhinagar',
+  'IIT Patna',
+  'IIT Ropar',
+  'IIT Mandi',
+  'IIT (BHU) Varanasi',
+  'IIT Jodhpur',
+  'IIT Bhilai',
+  'IIT Goa',
+  'IIT Jammu',
+  'IIT Dharwad',
+  'IIT Palakkad',
+  'IIT Tirupati',
+  'IIT (ISM) Dhanbad',
+  
+  // === ALL NITs (31) ===
+  'NIT Trichy (Tiruchirappalli)',
+  'NIT Surathkal (Karnataka)',
+  'NIT Warangal',
+  'NIT Calicut',
+  'NIT Rourkela',
+  'NIT Durgapur',
+  'NIT Jaipur',
+  'NIT Kurukshetra',
+  'NIT Nagpur',
+  'NIT Silchar',
+  'NIT Hamirpur',
+  'NIT Jalandhar',
+  'NIT Raipur',
+  'NIT Allahabad (Prayagraj)',
+  'NIT Bhopal',
+  'NIT Jamshedpur',
+  'NIT Patna',
+  'NIT Surat',
+  'NIT Agartala',
+  'NIT Arunachal Pradesh',
+  'NIT Delhi',
+  'NIT Goa',
+  'NIT Manipur',
+  'NIT Meghalaya',
+  'NIT Mizoram',
+  'NIT Nagaland',
+  'NIT Puducherry',
+  'NIT Sikkim',
+  'NIT Srinagar',
+  'NIT Uttarakhand',
+  'NIT Andhra Pradesh',
+  
+  // === KARNATAKA ENGINEERING COLLEGES ===
+  'RV College of Engineering (RVCE), Bangalore',
+  'BMS College of Engineering, Bangalore',
+  'MS Ramaiah Institute of Technology, Bangalore',
+  'PES University, Bangalore',
+  'Dayananda Sagar College of Engineering, Bangalore',
+  'BMS Institute of Technology, Bangalore',
+  'Sir M Visvesvaraya Institute of Technology (MVIT), Bangalore',
+  'Bangalore Institute of Technology (BIT)',
+  'JSS Science and Technology University, Mysore',
+  'Manipal Institute of Technology, Manipal',
+  'NMAM Institute of Technology, Nitte',
+  'KLE Technological University, Hubballi',
+  'Nitte Meenakshi Institute of Technology, Bangalore',
+  'CMR Institute of Technology, Bangalore',
+  'New Horizon College of Engineering, Bangalore',
+  'Acharya Institute of Technology, Bangalore',
+  'Oxford College of Engineering, Bangalore',
+  'SJB Institute of Technology, Bangalore',
+  'RNS Institute of Technology, Bangalore',
+  'Global Academy of Technology, Bangalore',
+  'REVA University, Bangalore',
+  'Jain University, Bangalore',
+  'Christ University, Bangalore',
+  'NIE Institute of Technology, Mysore',
+  'Siddaganga Institute of Technology, Tumkur',
+  'Gogte Institute of Technology, Belgaum',
+  'SDM College of Engineering and Technology, Dharwad',
+  'Basaveshwar Engineering College, Bagalkot',
+  'KLS Vishwanathrao Deshpande Rural Institute, Haliyal',
+  'Sahyadri College of Engineering, Mangalore',
+  
+  // === OTHER PREMIER INSTITUTES ===
+  'BITS Pilani',
+  'BITS Goa',
+  'BITS Hyderabad',
+  'IIIT Bangalore',
+  'IIIT Hyderabad',
+  'IIIT Allahabad',
+  'VIT Vellore',
+  'VIT Chennai',
+  'VIT Bhopal',
+  'VIT Andhra Pradesh',
+  'SRM Institute of Science and Technology, Chennai',
+  'Amity University',
+  'Thapar Institute of Engineering and Technology',
+  'Delhi Technological University (DTU)',
+  'Netaji Subhas University of Technology (NSUT), Delhi',
+  'Anna University, Chennai',
+  'PSG College of Technology, Coimbatore',
+  'Jadavpur University, Kolkata',
+  'College of Engineering Pune (COEP)',
+  'Veermata Jijabai Technological Institute (VJTI), Mumbai',
+  
+  // === CUSTOM OPTION ===
+  'Other (Enter Your College)'
+];
 
 const Profile: React.FC = () => {
   const { userId } = useParams();
@@ -28,6 +146,8 @@ const Profile: React.FC = () => {
   const [editData, setEditData] = useState({
     displayName: '',
     bio: '',
+    college: '',
+    customCollege: '',
     location: '',
     phone: '',
     website: '',
@@ -65,9 +185,12 @@ const Profile: React.FC = () => {
       
       if (data) {
         setProfile(data);
+        const isPopularCollege = POPULAR_COLLEGES.includes(data.college || '');
         setEditData({
           displayName: data.displayName || '',
           bio: data.bio || '',
+          college: isPopularCollege ? (data.college || '') : 'Other (Enter Your College)',
+          customCollege: isPopularCollege ? '' : (data.college || ''),
           location: data.location || '',
           phone: data.phone || '',
           website: data.website || '',
@@ -76,9 +199,23 @@ const Profile: React.FC = () => {
           github: data.socialLinks?.github || '',
           instagram: data.socialLinks?.instagram || ''
         });
+      } else {
+        // Profile doesn't exist - if it's own profile, redirect to onboarding
+        if (isOwnProfile) {
+          navigate('/onboarding');
+          return;
+        }
+        // For other users' profiles, set profile to null to show "not found"
+        setProfile(null);
       }
     } catch (error) {
       console.error('Error loading profile:', error);
+      // If it's own profile and there's an error, redirect to onboarding
+      if (isOwnProfile) {
+        navigate('/onboarding');
+      } else {
+        setProfile(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -103,6 +240,9 @@ const Profile: React.FC = () => {
     try {
       let photoURL = profile.photoURL;
 
+      // Determine final college name
+      const finalCollege = editData.college === 'Other (Enter Your College)' ? editData.customCollege : editData.college;
+
       // Upload new avatar if selected (using Cloudinary - free!)
       if (avatarFile) {
         photoURL = await uploadAndUpdateAvatar(currentUser.uid, avatarFile);
@@ -111,6 +251,7 @@ const Profile: React.FC = () => {
         await updateUserProfile(currentUser.uid, {
           displayName: editData.displayName,
           bio: editData.bio,
+          college: finalCollege,
           location: editData.location,
           phone: editData.phone,
           website: editData.website,
@@ -201,17 +342,17 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64">
       <Header title={isOwnProfile ? "My Profile" : profile.displayName} showSearchBar={true} />
       
-      <div className="max-w-4xl mx-auto md:p-6">
+      <div className="max-w-4xl mx-auto p-4 md:p-6">
         <div className="bg-white md:rounded-3xl overflow-hidden shadow-sm border border-slate-100">
           {/* Banner */}
           <div className="h-32 md:h-48 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
           
           <div className="px-6 pb-6">
-            <div className="flex flex-col md:flex-row items-start md:items-end gap-4 -mt-12 mb-6">
-              <div className="relative">
+            <div className="flex flex-col md:flex-row items-start md:items-end gap-4 -mt-12 mb-6 px-4 md:px-0">
+              <div className="relative flex-shrink-0">
                 <img 
                   src={avatarPreview || profile.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.displayName)}&background=4f46e5&color=fff`}
                   alt="Profile" 
@@ -230,21 +371,27 @@ const Profile: React.FC = () => {
                 )}
               </div>
               
-              <div className="flex-1">
+              <div className="flex-1 min-w-0 w-full md:w-auto">
                 {isEditing ? (
                   <input
                     type="text"
                     value={editData.displayName}
                     onChange={(e) => setEditData({ ...editData, displayName: e.target.value })}
-                    className="text-2xl font-bold text-slate-900 border-b-2 border-indigo-500 focus:outline-none"
+                    className="w-full text-xl md:text-2xl font-bold text-slate-900 border-b-2 border-indigo-500 focus:outline-none"
                   />
                 ) : (
-                  <h1 className="text-2xl font-bold text-slate-900">{profile.displayName}</h1>
+                  <h1 className="text-xl md:text-2xl font-bold text-slate-900 break-words pr-2">{profile.displayName}</h1>
                 )}
-                <p className="text-slate-500 text-sm">{profile.email}</p>
+                <p className="text-slate-500 text-sm break-words pr-2">{profile.email}</p>
+                {!isEditing && profile.college && (
+                  <div className="flex items-center gap-1.5 text-indigo-600 text-sm font-medium mt-1 flex-wrap">
+                    <GraduationCap size={16} className="flex-shrink-0" />
+                    <span className="break-words">{profile.college}</span>
+                  </div>
+                )}
               </div>
               
-              <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0">
+              <div className="flex gap-2 w-full md:w-auto mt-2 md:mt-0 flex-shrink-0">
                 {isOwnProfile ? (
                   isEditing ? (
                     <>
@@ -253,16 +400,16 @@ const Profile: React.FC = () => {
                           setIsEditing(false);
                           setAvatarPreview('');
                         }}
-                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50"
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-2"
+                        className="flex-1 md:flex-none bg-indigo-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 md:gap-2"
                       >
-                        {saving ? <Loader2 className="animate-spin" size={16} /> : <Check size={16} />}
+                        {saving ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
                         {saving ? 'Saving...' : 'Save'}
                       </button>
                     </>
@@ -270,24 +417,27 @@ const Profile: React.FC = () => {
                     <>
                       <button
                         onClick={() => setIsEditing(true)}
-                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50 flex items-center gap-2"
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center"
                       >
-                        <Edit2 size={16} />
-                        Edit Profile
+                        <Edit2 size={14} className="md:w-4 md:h-4" />
+                        <span className="hidden sm:inline">Edit Profile</span>
+                        <span className="sm:hidden">Edit</span>
                       </button>
                       <button
                         onClick={handleShare}
-                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50 flex items-center gap-2"
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center"
                       >
-                        <Share2 size={16} />
-                        {linkCopied ? 'Copied!' : 'Share'}
+                        <Share2 size={14} className="md:w-4 md:h-4" />
+                        <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Share'}</span>
+                        <span className="sm:hidden">{linkCopied ? '✓' : 'Share'}</span>
                       </button>
                       <button
                         onClick={handleLogout}
-                        className="flex-1 md:flex-none bg-red-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-red-700 shadow-lg shadow-red-200 flex items-center gap-2"
+                        className="flex-1 md:flex-none bg-red-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-red-700 shadow-lg shadow-red-200 flex items-center gap-1.5 md:gap-2 justify-center"
                       >
-                        <LogOut size={16} />
-                        Logout
+                        <LogOut size={14} className="md:w-4 md:h-4" />
+                        <span className="hidden sm:inline">Logout</span>
+                        <span className="sm:hidden">Out</span>
                       </button>
                     </>
                   )
@@ -301,17 +451,19 @@ const Profile: React.FC = () => {
                           userPhoto: profile.photoURL
                         } 
                       })}
-                      className="flex-1 md:flex-none bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center gap-2"
+                      className="flex-1 md:flex-none bg-indigo-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center gap-1.5 md:gap-2 justify-center"
                     >
-                      <MessageCircle size={16} />
-                      Message
+                      <MessageCircle size={14} className="md:w-4 md:h-4" />
+                      <span className="hidden sm:inline">Message</span>
+                      <span className="sm:hidden">Msg</span>
                     </button>
                     <button
                       onClick={handleShare}
-                      className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-4 py-2 rounded-lg font-medium text-sm hover:bg-slate-50 flex items-center gap-2"
+                      className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center"
                     >
-                      <Share2 size={16} />
-                      {linkCopied ? 'Copied!' : 'Share'}
+                      <Share2 size={14} className="md:w-4 md:h-4" />
+                      <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Share'}</span>
+                      <span className="sm:hidden">{linkCopied ? '✓' : 'Share'}</span>
                     </button>
                     <div className="relative">
                       <button
@@ -354,6 +506,35 @@ const Profile: React.FC = () => {
                     className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
                     rows={3}
                   />
+                  
+                  <div className="relative">
+                    <GraduationCap className="absolute left-3 top-3 text-slate-400" size={18} />
+                    <select
+                      value={editData.college}
+                      onChange={(e) => setEditData({ ...editData, college: e.target.value, customCollege: '' })}
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
+                    >
+                      <option value="">Select your college...</option>
+                      {POPULAR_COLLEGES.map((college) => (
+                        <option key={college} value={college}>
+                          {college}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {editData.college === 'Other (Enter Your College)' && (
+                    <div className="relative">
+                      <GraduationCap className="absolute left-3 top-3 text-slate-400" size={18} />
+                      <input
+                        type="text"
+                        value={editData.customCollege}
+                        onChange={(e) => setEditData({ ...editData, customCollege: e.target.value })}
+                        placeholder="Enter your college name"
+                        className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  )}
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="relative">
@@ -431,6 +612,12 @@ const Profile: React.FC = () => {
                   )}
                   
                   <div className="flex flex-wrap gap-4 text-xs text-slate-500">
+                    {profile.college && (
+                      <div className="flex items-center gap-1">
+                        <GraduationCap size={14} />
+                        {profile.college}
+                      </div>
+                    )}
                     {profile.location && (
                       <div className="flex items-center gap-1">
                         <MapPin size={14} />

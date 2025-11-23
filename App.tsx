@@ -1,7 +1,8 @@
 import React, { useEffect, useState, createContext, useContext } from 'react';
 import { HashRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
-import { auth } from './firebaseConfig';
+import { doc, getDoc } from 'firebase/firestore';
+import { auth, db } from './firebaseConfig';
 import { Loader2 } from 'lucide-react';
 
 // Pages
@@ -67,6 +68,60 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
       </main>
     </div>
   );
+};
+
+// Onboarding Guard - checks if user has completed onboarding
+const OnboardingGuard = ({ children }: { children: React.ReactElement }) => {
+  const { user } = useAuth();
+  const location = useLocation();
+  const [checking, setChecking] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
+
+  useEffect(() => {
+    const checkOnboarding = async () => {
+      if (!user || location.pathname === '/onboarding') {
+        setChecking(false);
+        return;
+      }
+
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          const userData = userDoc.data();
+          // If user doesn't have college set, they need onboarding
+          if (!userData.college) {
+            setNeedsOnboarding(true);
+          }
+        } else {
+          // User document doesn't exist, needs onboarding
+          setNeedsOnboarding(true);
+        }
+      } catch (error) {
+        console.error('Error checking onboarding:', error);
+      } finally {
+        setChecking(false);
+      }
+    };
+
+    checkOnboarding();
+  }, [user, location.pathname]);
+
+  if (checking) {
+    return (
+      <div className="h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-center">
+          <Loader2 className="animate-spin text-indigo-600 mx-auto mb-4" size={48} />
+          <p className="text-slate-600 font-medium">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (needsOnboarding) {
+    return <Navigate to="/onboarding" replace />;
+  }
+
+  return children;
 };
 
 // Protected Route component
@@ -140,19 +195,21 @@ const App: React.FC = () => {
           path="/*"
           element={
             <ProtectedRoute>
-              <Layout>
-                <Routes>
-                  <Route path="/" element={<Feed />} />
-                  <Route path="/events" element={<Events />} />
-                  <Route path="/marketplace" element={<Marketplace />} />
-                  <Route path="/groups" element={<StudyGroups />} />
-                  <Route path="/messages" element={<Messages />} />
-                  <Route path="/timetable" element={<Timetable />} />
-                  <Route path="/resources" element={<Resources />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/profile/:userId" element={<Profile />} />
-                </Routes>
-              </Layout>
+              <OnboardingGuard>
+                <Layout>
+                  <Routes>
+                    <Route path="/" element={<Feed />} />
+                    <Route path="/events" element={<Events />} />
+                    <Route path="/marketplace" element={<Marketplace />} />
+                    <Route path="/groups" element={<StudyGroups />} />
+                    <Route path="/messages" element={<Messages />} />
+                    <Route path="/timetable" element={<Timetable />} />
+                    <Route path="/resources" element={<Resources />} />
+                    <Route path="/profile" element={<Profile />} />
+                    <Route path="/profile/:userId" element={<Profile />} />
+                  </Routes>
+                </Layout>
+              </OnboardingGuard>
             </ProtectedRoute>
           }
         />

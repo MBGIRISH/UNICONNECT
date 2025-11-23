@@ -1,4 +1,4 @@
-import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { updateProfile as firebaseUpdateProfile } from 'firebase/auth';
 import { db, auth } from '../firebaseConfig';
 import { User } from '../types';
@@ -13,15 +13,35 @@ export const getUserProfile = async (uid: string): Promise<User | null> => {
   return null;
 };
 
-// Update user profile
+// Update user profile (creates document if it doesn't exist)
 export const updateUserProfile = async (
   uid: string,
   updates: Partial<Omit<User, 'uid' | 'email' | 'createdAt'>>
 ): Promise<void> => {
-  await updateDoc(doc(db, 'users', uid), {
-    ...updates,
-    updatedAt: serverTimestamp()
-  });
+  // Check if document exists
+  const userDoc = await getDoc(doc(db, 'users', uid));
+  
+  if (!userDoc.exists()) {
+    // Document doesn't exist, create it with merge: true
+    // Get email from auth user if available
+    const currentUser = auth.currentUser;
+    const email = currentUser?.email || '';
+    
+    await setDoc(doc(db, 'users', uid), {
+      email,
+      displayName: currentUser?.displayName || 'User',
+      photoURL: currentUser?.photoURL || undefined,
+      ...updates,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp()
+    }, { merge: true });
+  } else {
+    // Document exists, update it
+    await updateDoc(doc(db, 'users', uid), {
+      ...updates,
+      updatedAt: serverTimestamp()
+    });
+  }
 
   // Also update Firebase Auth profile if display name or photo changed
   const currentUser = auth.currentUser;
