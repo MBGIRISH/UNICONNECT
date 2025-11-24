@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search } from 'lucide-react';
+import { Send, Bot, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search, Smile, FileText, BarChart3, Video, File } from 'lucide-react';
 import { StudyGroup, ChatMessage } from '../types';
 import Header from '../components/Header';
 import { generateStudyHelp } from '../services/geminiService';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit, getDocs, doc, updateDoc, increment, setDoc, getDoc } from 'firebase/firestore';
-import { uploadPostImages } from '../services/cloudinaryService';
+import { uploadImageToCloudinary } from '../services/cloudinaryService';
 
 const StudyGroups: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<StudyGroup | null>(null);
@@ -20,6 +20,20 @@ const StudyGroups: React.FC = () => {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState('');
   const [uploading, setUploading] = useState(false);
+  const [showPlusMenu, setShowPlusMenu] = useState(false);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [gifSearchTerm, setGifSearchTerm] = useState('');
+  const [gifResults, setGifResults] = useState<any[]>([]);
+  const [selectedGif, setSelectedGif] = useState<string | null>(null);
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [documentFile, setDocumentFile] = useState<File | null>(null);
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const plusMenuRef = useRef<HTMLDivElement>(null);
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const gifPickerRef = useRef<HTMLDivElement>(null);
   const [myGroupIds, setMyGroupIds] = useState<Set<string>>(new Set());
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
@@ -39,15 +53,63 @@ const StudyGroups: React.FC = () => {
     loadMyGroups();
   }, []);
 
+  // Debug: Log when files change to verify send button state
+  useEffect(() => {
+    const hasContent = messageText.trim() || imageFile || videoFile || documentFile || selectedGif || (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2);
+    const isDisabled = uploading || !selectedGroup || !user || !hasContent;
+    
+    // Only log when files are actually selected to reduce spam
+    if (imageFile || videoFile || documentFile || selectedGif) {
+      console.log('🔍 Send button state check (FILE SELECTED):', {
+        hasContent: !!hasContent,
+        isDisabled,
+        imageFile: !!imageFile,
+        imageFileName: imageFile?.name,
+        videoFile: !!videoFile,
+        videoFileName: videoFile?.name,
+        documentFile: !!documentFile,
+        documentFileName: documentFile?.name,
+        selectedGif: !!selectedGif,
+        messageText: messageText.trim(),
+        uploading,
+        selectedGroup: !!selectedGroup,
+        user: !!user
+      });
+    }
+  }, [imageFile, videoFile, documentFile, selectedGif, messageText, uploading, selectedGroup, user, showPollCreator, pollQuestion, pollOptions]);
+
   const loadGroups = async () => {
     setLoading(true);
     try {
       if (!db) throw new Error("DB unavailable");
       const querySnapshot = await getDocs(collection(db, "groups"));
-      const fetchedGroups = querySnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as StudyGroup));
+      
+      // Calculate actual member count from members subcollection for each group
+      const fetchedGroups = await Promise.all(
+        querySnapshot.docs.map(async (groupDoc) => {
+          const groupData = groupDoc.data();
+          
+          // Get actual member count from members subcollection
+          try {
+            const membersSnapshot = await getDocs(collection(db, "groups", groupDoc.id, "members"));
+            const actualMemberCount = membersSnapshot.size;
+            
+            return {
+              id: groupDoc.id,
+              ...groupData,
+              memberCount: actualMemberCount // Use actual count from subcollection
+            } as StudyGroup;
+          } catch (memberErr) {
+            // If subcollection doesn't exist or error, use stored memberCount or 0
+            console.warn(`Could not count members for group ${groupDoc.id}:`, memberErr);
+            return {
+              id: groupDoc.id,
+              ...groupData,
+              memberCount: groupData.memberCount || 0
+            } as StudyGroup;
+          }
+        })
+      );
       
       if (fetchedGroups.length > 0) {
         setGroups(fetchedGroups);
@@ -120,42 +182,183 @@ const StudyGroups: React.FC = () => {
   }, [selectedGroup, user, userRole]);
 
   useEffect(() => {
-    if (!selectedGroup) return;
+    // Don't set up listener if user is not authenticated
+    if (!user) {
+      console.log('⏳ Waiting for user authentication...');
+      setMessages([]);
+      return;
+    }
+
+    if (!selectedGroup || !db) {
+      setMessages([]);
+      return;
+    }
+
+    console.log('🔌 Setting up Firestore listener for group:', selectedGroup.id, 'User:', user.uid);
 
     let unsubscribe = () => {};
     try {
-        if (db) {
+        // Check if Firestore is available
+        if (!db) {
+            console.error('❌ Firestore (db) is not initialized');
+            alert('❌ Firestore not initialized!\n\nPlease check:\n1. Firebase project is correct\n2. Firestore API is enabled\n3. Refresh the page');
+            return () => {};
+        }
+        
             const q = query(
                 collection(db, "groups", selectedGroup.id, "messages"),
                 orderBy("timestamp", "asc"),
                 limit(50)
             );
 
-            unsubscribe = onSnapshot(q, (snapshot) => {
+        unsubscribe = onSnapshot(q, 
+            (snapshot) => {
+                console.log('✅ Firestore listener connected, messages:', snapshot.docs.length);
                 const msgs = snapshot.docs.map(doc => {
                     const data = doc.data();
-                    return {
+                    const msg = {
                         id: doc.id,
-                        ...data,
-                        timestamp: data.timestamp ? data.timestamp.toDate() : new Date()
+                        text: data.text || '',
+                        senderId: data.senderId || '',
+                        senderName: data.senderName || 'Unknown',
+                        imageUrl: data.imageUrl || null,
+                        videoUrl: data.videoUrl || null,
+                        documentUrl: data.documentUrl || null,
+                        documentName: data.documentName || null,
+                        stickerUrl: data.stickerUrl || null,
+                        poll: data.poll || null,
+                        timestamp: data.timestamp ? data.timestamp.toDate() : new Date(),
+                        isAi: data.isAi || false
                     } as ChatMessage;
+                    return msg;
                 });
+                // Sort messages by timestamp
+                msgs.sort((a, b) => {
+                    const timeA = a.timestamp instanceof Date ? a.timestamp.getTime() : new Date(a.timestamp as any).getTime();
+                    const timeB = b.timestamp instanceof Date ? b.timestamp.getTime() : new Date(b.timestamp as any).getTime();
+                    return timeA - timeB;
+                });
+                
+                console.log('📨 Processed messages:', msgs.length, 'messages');
+                if (msgs.length > 0) {
+                    console.log('📨 First message:', { id: msgs[0].id, text: msgs[0].text?.substring(0, 30), senderName: msgs[0].senderName });
+                    console.log('📨 Last message:', { id: msgs[msgs.length - 1].id, text: msgs[msgs.length - 1].text?.substring(0, 30), senderName: msgs[msgs.length - 1].senderName });
+                }
                 setMessages(msgs);
-                setTimeout(() => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
-            }, (error) => {
-                console.error("Group Chat Error:", error);
-                setMessages([]);
-            });
+                // Scroll to bottom after messages are rendered
+                setTimeout(() => {
+                    if (messagesEndRef.current) {
+                        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+                    }
+                }, 300);
+            }, 
+            (error) => {
+                console.error("❌ Firestore Listener Error:", error);
+                console.error("Error details:", {
+                    code: error.code,
+                    message: error.message,
+                    stack: error.stack
+                });
+                
+                // Check if it's a permission error
+                if (error.code === 'permission-denied') {
+                    console.error("❌ Permission denied - check Firestore rules are published");
+                    alert('❌ Permission denied!\n\nPlease:\n1. Go to Firebase Console → Firestore → Rules\n2. Make sure rules match firestore.rules file\n3. Click "Publish" (not just Save!)\n4. Refresh this page');
+                } else if (error.code === 'failed-precondition') {
+                    console.error("❌ Index missing - Firestore needs an index for this query");
+                    console.error("Go to Firebase Console → Firestore → Indexes → Create index");
+                    alert('❌ Index missing!\n\nClick the link in the console to create the required index.');
+                } else if (error.message?.includes('access control') || error.message?.includes('CORS') || error.message?.includes('Fetch API cannot load') || error.code === 'unavailable') {
+                    console.error("❌ CORS/Access control error - Firestore API or rules issue");
+                    console.error("🔧 FIX STEPS:");
+                    console.error("1. Go to: https://console.cloud.google.com/apis/library/firestore.googleapis.com?project=campus-connect-fd225");
+                    console.error("2. Click 'ENABLE' if not enabled (wait 10-20 seconds)");
+                    console.error("3. Go to: https://console.firebase.google.com/project/campus-connect-fd225/firestore/rules");
+                    console.error("4. Click 'PUBLISH' (not just Save!) - wait for 'Rules published successfully'");
+                    console.error("5. Go to: https://console.firebase.google.com/project/campus-connect-fd225/firestore");
+                    console.error("6. Make sure database exists (if not, create it in 'Test mode')");
+                    console.error("7. Hard refresh this page (Cmd+Shift+R or Ctrl+Shift+R)");
+                    
+                    const errorDetails = `
+❌ FIRESTORE CONNECTION ERROR!
+
+🔧 STEP-BY-STEP FIX:
+
+1️⃣ ENABLE FIRESTORE API:
+   👉 https://console.cloud.google.com/apis/library/firestore.googleapis.com?project=campus-connect-fd225
+   → Click big blue "ENABLE" button
+   → Wait 10-20 seconds for activation
+
+2️⃣ PUBLISH FIRESTORE RULES:
+   👉 https://console.firebase.google.com/project/campus-connect-fd225/firestore/rules
+   → Make sure rules are correct
+   → Click "PUBLISH" (NOT "Save"!)
+   → Wait for "Rules published successfully"
+
+3️⃣ CHECK DATABASE EXISTS:
+   👉 https://console.firebase.google.com/project/campus-connect-fd225/firestore
+   → If you see "Create database", create it in "Test mode"
+   → Choose location (e.g., asia-south1)
+   → Click "Enable"
+
+4️⃣ HARD REFRESH:
+   → Press Cmd+Shift+R (Mac) or Ctrl+Shift+R (Windows)
+
+✅ After all steps, refresh this page!
+                    `;
+                    alert(errorDetails);
         } else {
-            setMessages([]);
-        }
-    } catch (e) {
-        console.error("Firestore init failed", e);
+                    console.error("Firestore error code:", error.code, error.message);
+                }
+                setMessages([]);
+            }
+        );
+    } catch (e: any) {
+        console.error("❌ Firestore init failed:", e);
         setMessages([]);
     }
 
-    return () => { if (unsubscribe) unsubscribe(); };
-  }, [selectedGroup]);
+    return () => { 
+        if (unsubscribe) {
+            try {
+                unsubscribe();
+                // Only log if it's a meaningful change (group/user changed), not just a re-render
+                if (selectedGroup?.id && user?.uid) {
+                    console.log('🔌 Firestore listener unsubscribed (group/user changed)');
+                }
+    } catch (e) {
+                console.error("Error unsubscribing:", e);
+            }
+        }
+    };
+  }, [selectedGroup?.id, user?.uid, db]);
+
+  // Real-time member count listener for selected group
+  useEffect(() => {
+    if (!selectedGroup || !db) return;
+
+    const membersRef = collection(db, 'groups', selectedGroup.id, 'members');
+    const unsubscribe = onSnapshot(membersRef, (snapshot) => {
+      const actualMemberCount = snapshot.size;
+      
+      // Update the selectedGroup's memberCount
+      setSelectedGroup(prev => prev ? {
+        ...prev,
+        memberCount: actualMemberCount
+      } : null);
+      
+      // Also update in the groups list
+      setGroups(prev => prev.map(g => 
+        g.id === selectedGroup.id 
+          ? { ...g, memberCount: actualMemberCount }
+          : g
+      ));
+    }, (error) => {
+      console.error('Error listening to members:', error);
+    });
+
+    return () => unsubscribe();
+  }, [selectedGroup?.id, db]);
 
 
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -320,78 +523,502 @@ const StudyGroups: React.FC = () => {
     }
   };
 
+
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      // For now, handle only the first file (can extend to multiple later)
+      const file = files[0];
+      console.log('📷 Image selected:', file.name, file.size, 'bytes', file.type);
       setImageFile(file);
+      setVideoFile(null);
+      setDocumentFile(null);
+      setSelectedGif(null);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
+        console.log('✅ Image preview ready, send button should be enabled');
       };
       reader.readAsDataURL(file);
+    } else {
+      console.log('⚠️ No image file selected');
+    }
+    // Reset input to allow selecting same file again
+    e.target.value = '';
+  };
+
+  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      console.log('🎥 Video selected:', file.name, file.size, 'bytes', file.type);
+      setVideoFile(file);
+      setImageFile(null);
+      setDocumentFile(null);
+      setImagePreview('');
+      setSelectedGif(null);
+      console.log('✅ Video file set, send button should be enabled');
+    } else {
+      console.log('⚠️ No video file selected');
+    }
+    setShowPlusMenu(false);
+    // Reset input to allow selecting same file again
+    e.target.value = '';
+  };
+
+  const handleDocumentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      console.log('📄 Document selected:', file.name, file.size, 'bytes', file.type);
+      setDocumentFile(file);
+      setImageFile(null);
+      setVideoFile(null);
+      setImagePreview('');
+      setSelectedGif(null);
+      console.log('✅ Document file set');
+      console.log('✅ Send button should now be ENABLED - documentFile is set:', !!file);
+    } else {
+      console.log('⚠️ No document file selected');
+    }
+    setShowPlusMenu(false);
+    // Reset input to allow selecting same file again
+    e.target.value = '';
+  };
+
+  const addPollOption = () => {
+    if (pollOptions.length < 4) {
+      setPollOptions([...pollOptions, '']);
+    }
+  };
+
+  const removePollOption = (index: number) => {
+    if (pollOptions.length > 2) {
+      setPollOptions(pollOptions.filter((_, i) => i !== index));
+    }
+  };
+
+  const emojis = ['😀', '😂', '❤️', '👍', '👏', '🎉', '🔥', '💯', '😊', '😍', '🤔', '🙌', '😎', '🥳', '🤩', '😋', '😴', '🤗', '😇', '🥰', '😘', '🤪', '😜', '😝', '🤤', '😌', '😏', '😒', '🙄', '🤐', '😷', '🤒', '🤕', '🤢', '🤮', '🤧', '🥵', '🥶', '😱', '😨', '😰', '😥', '😓', '🤗', '🤔', '🤭', '🤫', '🤥', '😶', '😐', '😑', '😬', '🙄', '😯', '😦', '😧', '😮', '😲', '🥱', '😴', '🤤', '😪', '😵', '🤯', '🤠', '🥳', '😎', '🤓', '🧐', '🤨', '🤝', '👏', '🙌', '👐', '🤲', '🤝', '🙏', '✍️', '💪', '🦵', '🦶', '👂', '🦻', '👃', '🧠', '🦷', '🦴', '👀', '👁️', '👅', '👄', '💋', '💘', '💝', '💖', '💗', '💓', '💞', '💕', '💟', '❣️', '💔', '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '🤍', '🤎', '💯', '💢', '💥', '💫', '💦', '💨', '🕳️', '💣', '💬', '👁️‍🗨️', '🗨️', '🗯️', '💭', '💤'];
+
+  // GIF search using Giphy API
+  const searchGifs = async (searchTerm: string) => {
+    try {
+      const apiKey = '3XEocAPxmO6auiyHBqiHea0eeu9XnGo4'; // Giphy API key
+      let url = '';
+      
+      if (searchTerm && searchTerm.trim() !== '' && searchTerm !== 'trending') {
+        url = `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(searchTerm)}&limit=20&rating=g`;
+      } else {
+        url = `https://api.giphy.com/v1/gifs/trending?api_key=${apiKey}&limit=20&rating=g`;
+      }
+      
+      console.log('GIPHY API request:', url);
+      const response = await fetch(url);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('GIPHY API success:', data.data?.length || 0, 'GIFs found');
+        setGifResults(data.data || []);
+      } else {
+        console.error('GIPHY API error:', response.status, response.statusText);
+        const errorData = await response.json().catch(() => ({}));
+        console.error('GIPHY error details:', errorData);
+        alert(`GIF search failed: ${errorData.message || response.statusText}. Please check your GIPHY API key.`);
+        setGifResults([]);
+      }
+    } catch (error: any) {
+      console.error('Error searching GIFs:', error);
+      alert(`GIF search error: ${error.message}. Please check your internet connection.`);
+      setGifResults([]);
+    }
+  };
+
+  // Click outside handler for emoji and GIF pickers
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (plusMenuRef.current && !plusMenuRef.current.contains(event.target as Node)) {
+        setShowPlusMenu(false);
+      }
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+      if (gifPickerRef.current && !gifPickerRef.current.contains(event.target as Node)) {
+        setShowGifPicker(false);
+      }
+    };
+    if (showPlusMenu || showEmojiPicker || showGifPicker) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showPlusMenu, showEmojiPicker, showGifPicker]);
+
+  // Handle poll voting
+  const handlePollVote = async (messageId: string, optionIndex: number) => {
+    if (!user || !db || !selectedGroup || !messageId) return;
+    
+    try {
+      const postRef = doc(db, 'groups', selectedGroup.id, 'messages', messageId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return;
+      
+      const postData = postSnap.data();
+      const currentVotes = postData.poll?.votes || {};
+      const currentUserVotes = postData.poll?.userVotes || {};
+      const optionKey = optionIndex.toString();
+      
+      const optionVoters = currentUserVotes[optionKey] || [];
+      const hasVoted = optionVoters.includes(user.uid);
+      
+      if (hasVoted) {
+        // Remove vote
+        const newVoters = optionVoters.filter((uid: string) => uid !== user.uid);
+        const newVoteCount = Math.max(0, (currentVotes[optionKey] || 0) - 1);
+        
+        await updateDoc(postRef, {
+          [`poll.votes.${optionKey}`]: newVoteCount,
+          [`poll.userVotes.${optionKey}`]: newVoters
+        });
+      } else {
+        // Add vote
+        const newVoters = [...optionVoters, user.uid];
+        const newVoteCount = (currentVotes[optionKey] || 0) + 1;
+        
+        await updateDoc(postRef, {
+          [`poll.votes.${optionKey}`]: newVoteCount,
+          [`poll.userVotes.${optionKey}`]: newVoters
+        });
+      }
+    } catch (error) {
+      console.error('Error voting:', error);
     }
   };
 
   const handleSendMessage = async () => {
-    if ((!messageText.trim() && !imageFile) || !selectedGroup || !user) return;
+    // Allow sending if there's text, image, video, document, GIF, or poll
+    const hasContent = messageText.trim() || imageFile || videoFile || documentFile || selectedGif || (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2);
+    
+    console.log('🔵 handleSendMessage called:', {
+      hasContent,
+      messageText: messageText.trim(),
+      imageFile: !!imageFile,
+      imageFileName: imageFile?.name,
+      videoFile: !!videoFile,
+      videoFileName: videoFile?.name,
+      documentFile: !!documentFile,
+      documentFileName: documentFile?.name,
+      selectedGif: !!selectedGif,
+      selectedGroup: !!selectedGroup,
+      selectedGroupId: selectedGroup?.id,
+      user: !!user,
+      userId: user?.uid,
+      uploading: uploading
+    });
+    
+    if (!hasContent) {
+      console.warn('❌ Cannot send: No content (text, image, video, document, GIF, or poll)');
+      alert('Please add content to send (text, image, video, document, or sticker)');
+      return;
+    }
+    
+    if (!selectedGroup) {
+      console.warn('❌ Cannot send: No group selected');
+      alert('Please select a group first');
+      return;
+    }
+    
+    if (!user) {
+      console.warn('❌ Cannot send: User not authenticated');
+      alert('Please log in to send messages');
+      return;
+    }
+    
+    if (uploading) {
+      console.warn('⏳ Already uploading, please wait...');
+      return;
+    }
 
     const text = messageText;
+    // Store file references before clearing state
+    const currentImageFile = imageFile;
+    const currentVideoFile = videoFile;
+    const currentDocumentFile = documentFile;
+    const currentSelectedGif = selectedGif;
+    
+    // Clear state AFTER storing references
     setMessageText('');
     setUploading(true);
 
     try {
         let imageUrl = '';
+        let videoUrl = '';
+        let documentUrl = '';
+        let documentName = '';
+        let stickerUrl = '';
+        let poll = null;
+        
+        // Handle GIF/Sticker
+        if (currentSelectedGif) {
+          console.log('📤 Sending sticker/GIF:', currentSelectedGif);
+          stickerUrl = currentSelectedGif;
+          setSelectedGif(null);
+        }
         
         // Upload image if present
-        if (imageFile) {
-          const messageId = `msg_${Date.now()}`;
-          const urls = await uploadPostImages(messageId, [imageFile]);
-          imageUrl = urls[0];
-          setImageFile(null);
-          setImagePreview('');
+        if (currentImageFile) {
+          try {
+            console.log('📤 Uploading image:', currentImageFile.name, currentImageFile.size, 'bytes');
+            const formData = new FormData();
+            formData.append('file', currentImageFile);
+            formData.append('upload_preset', 'uniconnect_uploads');
+            formData.append('folder', `uniconnect/groups/${selectedGroup.id}/images`);
+            // Note: Don't add resource_type for images - Cloudinary auto-detects
+            
+            console.log('📋 Upload parameters:', {
+              preset: 'uniconnect_uploads',
+              folder: `uniconnect/groups/${selectedGroup.id}/images`,
+              fileName: currentImageFile.name,
+              fileSize: currentImageFile.size
+            });
+            
+            const response = await fetch(`https://api.cloudinary.com/v1_1/dlnlwudgr/image/upload`, {
+              method: 'POST',
+              body: formData,
+            });
+            
+            const responseData = await response.json().catch(async () => {
+              const text = await response.text().catch(() => 'Unknown error');
+              return { error: { message: text } };
+            });
+            
+            if (response.ok) {
+              imageUrl = responseData.secure_url;
+              console.log('✅ Image uploaded successfully:', imageUrl);
+            } else {
+              console.error('❌ Image upload error:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: responseData
+              });
+              
+              // Detailed error message based on Cloudinary response
+              let errorMsg = `Image upload failed (${response.status})`;
+              
+              if (responseData.error?.message) {
+                errorMsg = responseData.error.message;
+              } else if (response.status === 400) {
+                // 400 usually means preset is "Signed" or doesn't exist
+                errorMsg = `❌ Cloudinary 400 Error!\n\nYour upload preset 'uniconnect_uploads' is either:\n1. Set to "Signed" (MUST be "Unsigned")\n2. Doesn't exist\n3. Not configured correctly\n\n🔧 FIX:\n1. Go to: https://cloudinary.com/console/settings/upload\n2. Edit preset: uniconnect_uploads\n3. General tab → Signing Mode → Change to "Unsigned"\n4. Optimize and Deliver tab → Access control → Set to "Public"\n5. Click "Save"`;
+              } else if (response.status === 401) {
+                errorMsg = 'Cloudinary authentication failed. Check upload preset is set to "Unsigned".';
+              } else if (response.status === 403) {
+                errorMsg = 'Access denied. Check Cloudinary preset "Access control" is set to "Public".';
+              } else if (response.status === 404) {
+                errorMsg = 'Cloudinary preset not found. Create preset "uniconnect_uploads" with "Unsigned" signing mode.';
+              }
+              
+              throw new Error(errorMsg);
+            }
+            setImageFile(null);
+            setImagePreview('');
+          } catch (error: any) {
+            console.error('Image upload error:', error);
+            throw new Error(error.message || 'Failed to upload image. Please try again.');
+          }
+        }
+
+        // Upload video if present
+        if (currentVideoFile) {
+          try {
+            console.log('📤 Uploading video:', currentVideoFile.name, currentVideoFile.size, 'bytes');
+            const formData = new FormData();
+            formData.append('file', currentVideoFile);
+            formData.append('upload_preset', 'uniconnect_uploads');
+            formData.append('folder', `uniconnect/groups/${selectedGroup.id}/videos`);
+            
+            const response = await fetch(`https://api.cloudinary.com/v1_1/dlnlwudgr/video/upload`, {
+              method: 'POST',
+              body: formData,
+            });
+            
+            const responseData = await response.json().catch(async () => {
+              const text = await response.text().catch(() => 'Unknown error');
+              return { error: { message: text } };
+            });
+            
+            if (response.ok) {
+              videoUrl = responseData.secure_url;
+              console.log('✅ Video uploaded successfully:', videoUrl);
+            } else {
+              console.error('❌ Video upload error:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: responseData
+              });
+              
+              let errorMsg = `Video upload failed (${response.status})`;
+              if (responseData.error?.message) {
+                errorMsg = responseData.error.message;
+              } else if (response.status === 400) {
+                errorMsg = `❌ Cloudinary 400 Error!\n\nYour upload preset 'uniconnect_uploads' is either:\n1. Set to "Signed" (MUST be "Unsigned")\n2. Doesn't exist\n3. Not configured correctly\n\n🔧 FIX:\n1. Go to: https://cloudinary.com/console/settings/upload\n2. Edit preset: uniconnect_uploads\n3. General tab → Signing Mode → Change to "Unsigned"\n4. Optimize and Deliver tab → Access control → Set to "Public"\n5. Click "Save"`;
+              } else if (response.status === 401) {
+                errorMsg = 'Cloudinary authentication failed. Check upload preset is set to "Unsigned".';
+              } else if (response.status === 403) {
+                errorMsg = 'Access denied. Check Cloudinary preset "Access control" is set to "Public".';
+              } else if (response.status === 413) {
+                errorMsg = 'Video file too large. Maximum size is 10MB for free tier.';
+              }
+              
+              throw new Error(errorMsg);
+            }
+            setVideoFile(null);
+          } catch (error: any) {
+            console.error('❌ Video upload error:', error);
+            setUploading(false);
+            throw new Error(error.message || 'Failed to upload video. Please try again.');
+          }
+        }
+
+        // Upload document if present
+        if (currentDocumentFile) {
+          try {
+            console.log('📤 Uploading document:', currentDocumentFile.name, currentDocumentFile.size, 'bytes');
+            const formData = new FormData();
+            formData.append('file', currentDocumentFile);
+            formData.append('upload_preset', 'uniconnect_uploads');
+            formData.append('folder', `uniconnect/groups/${selectedGroup.id}/documents`);
+            
+            const response = await fetch(`https://api.cloudinary.com/v1_1/dlnlwudgr/raw/upload`, {
+              method: 'POST',
+              body: formData,
+            });
+            
+            const responseData = await response.json().catch(async () => {
+              const text = await response.text().catch(() => 'Unknown error');
+              return { error: { message: text } };
+            });
+            
+            if (response.ok) {
+              documentUrl = responseData.secure_url;
+              documentName = currentDocumentFile.name;
+              console.log('✅ Document uploaded successfully:', documentUrl);
+            } else {
+              console.error('❌ Document upload error:', {
+                status: response.status,
+                statusText: response.statusText,
+                error: responseData
+              });
+              
+              let errorMsg = `Document upload failed (${response.status})`;
+              if (responseData.error?.message) {
+                errorMsg = responseData.error.message;
+              } else if (response.status === 400) {
+                errorMsg = `❌ Cloudinary 400 Error!\n\nYour upload preset 'uniconnect_uploads' is either:\n1. Set to "Signed" (MUST be "Unsigned")\n2. Doesn't exist\n3. Not configured correctly\n\n🔧 FIX:\n1. Go to: https://cloudinary.com/console/settings/upload\n2. Edit preset: uniconnect_uploads\n3. General tab → Signing Mode → Change to "Unsigned"\n4. Optimize and Deliver tab → Access control → Set to "Public"\n5. Click "Save"`;
+              } else if (response.status === 401) {
+                errorMsg = 'Cloudinary authentication failed. Check upload preset is set to "Unsigned".';
+              } else if (response.status === 403) {
+                errorMsg = 'Access denied. Check Cloudinary preset "Access control" is set to "Public".';
+              } else if (response.status === 413) {
+                errorMsg = 'Document file too large. Maximum size is 10MB for free tier.';
+              }
+              
+              throw new Error(errorMsg);
+            }
+            setDocumentFile(null);
+          } catch (error: any) {
+            console.error('❌ Document upload error:', error);
+            setUploading(false);
+            throw new Error(error.message || 'Failed to upload document. Please try again.');
+          }
+        }
+
+        // Handle poll if created
+        if (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2) {
+          poll = {
+            question: pollQuestion,
+            options: pollOptions.filter(o => o.trim()),
+            votes: {},
+            userVotes: {}
+          };
+          setShowPollCreator(false);
+          setPollQuestion('');
+          setPollOptions(['', '']);
         }
 
         if (!db) throw new Error("DB unavailable");
 
-        // Add message to Firestore
+        // Only send message if there's actual content (text, image, video, document, sticker, or poll)
+        if (text.trim() || imageUrl || videoUrl || documentUrl || stickerUrl || poll) {
+          console.log('Saving message to Firestore:', {
+            hasText: !!text.trim(),
+            hasImage: !!imageUrl,
+            hasVideo: !!videoUrl,
+            hasDocument: !!documentUrl,
+            hasSticker: !!stickerUrl,
+            hasPoll: !!poll
+          });
+          
+          // Add message to Firestore
         await addDoc(collection(db, "groups", selectedGroup.id, "messages"), {
-            text: text,
+            text: text || '',
             imageUrl: imageUrl || null,
+            videoUrl: videoUrl || null,
+            documentUrl: documentUrl || null,
+            documentName: documentName || null,
+            stickerUrl: stickerUrl || null,
+            poll: poll || null,
             senderId: user.uid,
             senderName: user.displayName || 'User',
             timestamp: serverTimestamp(),
             isAi: false
         });
 
+          console.log('Message saved successfully to Firestore');
+        } else {
+          console.warn('No content to send - skipping message creation');
+          alert('No content to send. Please add text, image, video, document, sticker, or poll.');
+        }
+
         // Check for AI invocation
         if (text.toLowerCase().includes('@ai')) {
             setIsTyping(true);
-            const aiResponse = await generateStudyHelp(text, selectedGroup.subject);
+            try {
+              // Extract question and generate AI response
+              const aiResponse = await generateStudyHelp(text, selectedGroup.subject || 'General Studies');
             
+              // Add AI response to Firestore
             await addDoc(collection(db, "groups", selectedGroup.id, "messages"), {
                 text: aiResponse,
                 senderId: 'ai-bot',
-                senderName: 'Gemini AI',
+                  senderName: 'Study Buddy',
                 timestamp: serverTimestamp(),
                 isAi: true
             });
+            } catch (aiError: any) {
+              console.error('AI Error:', aiError);
+              // Add error message as AI response
+              await addDoc(collection(db, "groups", selectedGroup.id, "messages"), {
+                  text: "I'm having trouble right now. Please try again in a moment! If this persists, check your Grok API key configuration.",
+                  senderId: 'ai-bot',
+                  senderName: 'Study Buddy',
+                timestamp: serverTimestamp(),
+                    isAi: true
+            });
+            } finally {
             setIsTyping(false);
         }
-    } catch (e) {
-        console.error("Failed to send", e);
-        // Fallback for demo mode
-        const tempMsg: ChatMessage = {
-            id: Date.now().toString(),
-            senderId: user.uid,
-            senderName: user.displayName || 'Me',
-            text: text,
-            imageUrl: imagePreview || undefined,
-            timestamp: new Date(),
-            isAi: false
-        };
-        setMessages(prev => [...prev, tempMsg]);
-        setImageFile(null);
-        setImagePreview('');
+        }
+    } catch (e: any) {
+        console.error("Failed to send message:", e);
+        const errorMessage = e.message || 'Failed to send message. Please try again.';
+        
+        // Show detailed error to user
+        alert(`❌ Upload Failed!\n\n${errorMessage}\n\nPlease check:\n1. Cloudinary preset is set to "Unsigned"\n2. Access control is set to "Public"\n3. File size is under 10MB\n4. Internet connection is stable`);
+        
+        // Restore message text if upload failed
+        setMessageText(text);
+        
+        // Don't clear files on error - let user retry
+        // Files remain selected so user can try again
     } finally {
         setUploading(false);
     }
@@ -434,31 +1061,31 @@ const StudyGroups: React.FC = () => {
                 <p className="text-sm text-slate-400">Create a new group or join existing ones!</p>
               </div>
             ) : (
-              <div className="space-y-3">
+          <div className="space-y-3">
                 {myGroups.map(group => (
-                  <div 
-                    key={group.id} 
-                    onClick={() => setSelectedGroup(group)}
-                    className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
-                        <BookOpen size={24} />
-                      </div>
-                      <div>
+              <div 
+                key={group.id} 
+                onClick={() => setSelectedGroup(group)}
+                className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm flex justify-between items-center cursor-pointer hover:bg-slate-50 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
+                    <BookOpen size={24} />
+                  </div>
+                  <div>
                         <div className="flex items-center gap-2">
-                          <h3 className="font-bold text-slate-900">{group.name}</h3>
+                    <h3 className="font-bold text-slate-900">{group.name}</h3>
                           {group.isPrivate && <Lock size={14} className="text-slate-400" />}
                         </div>
-                        <p className="text-sm text-slate-500">{group.subject} • {group.members} members</p>
-                      </div>
-                    </div>
-                    <ChevronRight className="text-slate-300" />
+                    <p className="text-sm text-slate-500">{group.subject} • {group.memberCount || 0} members</p>
                   </div>
-                ))}
+                </div>
+                <ChevronRight className="text-slate-300" />
               </div>
-            )}
+            ))}
           </div>
+            )}
+        </div>
 
           {/* All Groups */}
           <div>
@@ -492,7 +1119,7 @@ const StudyGroups: React.FC = () => {
                           <h3 className="font-bold text-slate-900">{group.name}</h3>
                           {group.isPrivate ? <Lock size={14} className="text-slate-400" /> : <Globe size={14} className="text-green-500" />}
                         </div>
-                        <p className="text-sm text-slate-500">{group.subject} • {group.members} members</p>
+                        <p className="text-sm text-slate-500">{group.subject} • {group.memberCount || 0} members</p>
                         {group.description && <p className="text-xs text-slate-400 mt-1">{group.description}</p>}
                       </div>
                     </div>
@@ -600,7 +1227,7 @@ const StudyGroups: React.FC = () => {
                           </div>
                           <p className="text-sm text-slate-500 mt-1">{group.subject}</p>
                           {group.description && <p className="text-xs text-slate-400 mt-1">{group.description}</p>}
-                          <p className="text-xs text-slate-500 mt-2">{group.members} members</p>
+                          <p className="text-xs text-slate-500 mt-2">{group.memberCount || 0} members</p>
                         </div>
                         <button
                           onClick={() => handleJoinGroup(group.id)}
@@ -636,7 +1263,7 @@ const StudyGroups: React.FC = () => {
             <h3 className="font-bold text-slate-900 text-sm md:text-base leading-tight">{selectedGroup.name}</h3>
             <div className="flex items-center gap-1">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              <p className="text-[10px] text-slate-500">{selectedGroup.members} members • AI Active</p>
+              <p className="text-[10px] text-slate-500">{selectedGroup.memberCount || 0} members • AI Active</p>
             </div>
           </div>
         </div>
@@ -664,7 +1291,7 @@ const StudyGroups: React.FC = () => {
       )}
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+      <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
         {messages.length === 0 && (
           <div className="text-center text-slate-400 text-sm mt-10">
             <Bot size={48} className="mx-auto text-indigo-300 mb-3" />
@@ -673,10 +1300,19 @@ const StudyGroups: React.FC = () => {
           </div>
         )}
         
-        {messages.map((msg) => {
+        {messages.length > 0 && (
+          <div className="text-xs text-slate-400 mb-2 px-2 sticky top-0 bg-slate-50 z-10 py-1">
+            {messages.length} message{messages.length !== 1 ? 's' : ''}
+          </div>
+        )}
+        
+        {messages.map((msg, index) => {
+          if (!msg || !msg.id) {
+            return null;
+          }
           const isMe = msg.senderId === user?.uid || msg.senderId === 'me';
           return (
-            <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
+            <div key={msg.id || `msg-${index}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-3`}>
                 <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-3.5 text-sm shadow-sm ${
                 isMe 
                     ? 'bg-primary text-white rounded-br-none' 
@@ -690,7 +1326,7 @@ const StudyGroups: React.FC = () => {
                     Study Buddy
                     </div>
                 )}
-                {!isMe && !msg.isAi && <p className="text-[10px] font-bold text-slate-400 mb-1">{msg.senderName}</p>}
+                {!isMe && !msg.isAi && <p className="text-[10px] font-bold text-slate-400 mb-1">{msg.senderName || 'Unknown'}</p>}
                 
                 {msg.imageUrl && (
                   <img 
@@ -700,11 +1336,98 @@ const StudyGroups: React.FC = () => {
                     onClick={() => window.open(msg.imageUrl, '_blank')}
                   />
                 )}
+                {msg.videoUrl && (
+                  <div className="mb-2">
+                    <video 
+                      src={msg.videoUrl} 
+                      controls
+                      className="max-w-[250px] rounded-lg"
+                    />
+                  </div>
+                )}
+                {msg.documentUrl && (
+                  <div className="mb-2 p-3 bg-slate-100 rounded-lg flex items-center gap-2">
+                    <FileText size={20} className="text-primary" />
+                    <div className="flex-1">
+                      <p className="text-sm font-medium text-slate-700">{msg.documentName || 'Document'}</p>
+                      <a 
+                        href={msg.documentUrl} 
+                        target="_blank" 
+                        rel="noopener noreferrer"
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Download
+                      </a>
+                    </div>
+                  </div>
+                )}
+                {msg.stickerUrl && (
+                  <div className="mb-2">
+                    <img 
+                      src={msg.stickerUrl} 
+                      alt="Sticker" 
+                      className="max-w-[200px] rounded-lg"
+                    />
+                  </div>
+                )}
+                {msg.poll && (
+                  <div className="mb-2 p-3 bg-slate-50 rounded-lg border border-slate-200">
+                    <h4 className="font-semibold text-sm text-slate-800 mb-2">{msg.poll.question}</h4>
+                    <div className="space-y-2">
+                      {msg.poll.options.map((option, index) => {
+                        const votes = msg.poll?.votes?.[index.toString()] || 0;
+                        const totalVotes = Object.values(msg.poll?.votes || {}).reduce((a: number, b: number) => a + b, 0) || 0;
+                        const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+                        const optionVoters = msg.poll?.userVotes?.[index.toString()] || [];
+                        const userHasVoted = user ? optionVoters.includes(user.uid) : false;
+                        
+                        return (
+                          <button
+                            key={index}
+                            onClick={() => msg.id && handlePollVote(msg.id, index)}
+                            className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                              userHasVoted 
+                                ? 'bg-indigo-100 border-indigo-300' 
+                                : 'bg-white border-slate-200 hover:border-indigo-300'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm text-slate-700">{option}</span>
+                              {userHasVoted && <span className="text-xs text-indigo-600 font-medium">✓</span>}
+                            </div>
+                            {totalVotes > 0 && (
+                              <div className="mt-1 h-1 bg-slate-200 rounded-full overflow-hidden">
+                                <div
+                                  className="h-full bg-indigo-500 rounded-full transition-all"
+                                  style={{ width: `${percentage}%` }}
+                                />
+                              </div>
+                            )}
+                            <span className="text-xs text-slate-500 mt-1 block">{votes} votes</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
                 
                 {msg.text && <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
                 
                 <span className={`text-[10px] block text-right mt-1 ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
-                    {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+                    {(() => {
+                      if (!msg.timestamp) return '...';
+                      if (msg.timestamp instanceof Date) {
+                        return msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      }
+                      if (typeof msg.timestamp === 'object' && 'toDate' in msg.timestamp) {
+                        return (msg.timestamp as any).toDate().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      }
+                      try {
+                        return new Date(msg.timestamp as any).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                      } catch {
+                        return '...';
+                      }
+                    })()}
                 </span>
                 </div>
             </div>
@@ -744,32 +1467,388 @@ const StudyGroups: React.FC = () => {
 
       {/* Input Area */}
       <div className="p-3 md:p-4 bg-white border-t border-slate-200">
-        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-full border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all">
-          <label className="p-2 text-slate-400 hover:text-primary cursor-pointer transition-colors">
-            <ImageIcon size={20} />
-            <input 
-              type="file" 
-              accept="image/*" 
-              onChange={handleImageSelect}
-              className="hidden"
+        {/* Poll Creator */}
+        {showPollCreator && (
+          <div className="mb-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-sm text-slate-700">Create Poll</h4>
+              <button onClick={() => setShowPollCreator(false)} className="text-slate-400 hover:text-slate-600">
+                <X size={18} />
+              </button>
+            </div>
+            <input
+              type="text"
+              placeholder="Poll question..."
+              value={pollQuestion}
+              onChange={(e) => setPollQuestion(e.target.value)}
+              className="w-full px-3 py-2 mb-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
-          </label>
+            {pollOptions.map((option, index) => (
+              <div key={index} className="flex gap-2 mb-2">
+                <input
+                  type="text"
+                  placeholder={`Option ${index + 1}`}
+                  value={option}
+                  onChange={(e) => {
+                    const newOptions = [...pollOptions];
+                    newOptions[index] = e.target.value;
+                    setPollOptions(newOptions);
+                  }}
+                  className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                {pollOptions.length > 2 && (
+                  <button onClick={() => removePollOption(index)} className="p-2 text-red-500 hover:bg-red-50 rounded">
+                    <X size={16} />
+                  </button>
+                )}
+              </div>
+            ))}
+            {pollOptions.length < 4 && (
+              <button onClick={addPollOption} className="text-sm text-primary hover:underline">
+                + Add Option
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-full border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all">
+          {/* Plus Button with Menu */}
+          <div className="relative" ref={plusMenuRef}>
+            <button
+              onClick={() => {
+                setShowPlusMenu(!showPlusMenu);
+                setShowEmojiPicker(false);
+              }}
+              className="p-2 text-slate-400 hover:text-primary cursor-pointer transition-colors"
+            >
+              <Plus size={20} />
+            </button>
+            {showPlusMenu && (
+              <div className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-200 p-2 z-50 min-w-[180px]">
+                <button
+                  onClick={() => {
+                    document.getElementById('photo-upload')?.click();
+                    setShowPlusMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
+                >
+                  <ImageIcon size={18} />
+                  Photos
+                </button>
+                <input
+                  type="file"
+                  id="photo-upload"
+                  accept="image/*"
+                  onChange={handleImageSelect}
+                  className="hidden"
+                  multiple
+                />
+                <button
+                  onClick={() => {
+                    document.getElementById('video-upload')?.click();
+                    setShowPlusMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
+                >
+                  <Video size={18} />
+                  Videos
+                </button>
+                <input
+                  type="file"
+                  id="video-upload"
+                  accept="video/*"
+                  onChange={handleVideoSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => {
+                    document.getElementById('document-upload')?.click();
+                    setShowPlusMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
+                >
+                  <File size={18} />
+                  Documents
+                </button>
+                <input
+                  type="file"
+                  id="document-upload"
+                  accept=".pdf,.doc,.docx,.txt"
+                  onChange={handleDocumentSelect}
+                  className="hidden"
+                />
+                <button
+                  onClick={() => {
+                    setShowPollCreator(true);
+                    setShowPlusMenu(false);
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
+                >
+                  <BarChart3 size={18} />
+                  Poll
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowGifPicker(true);
+                    setShowPlusMenu(false);
+                    setShowEmojiPicker(false);
+                    setGifSearchTerm('');
+                    searchGifs('trending');
+                  }}
+                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
+                >
+                  <Smile size={18} />
+                  Sticker (GIF)
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* GIF/Sticker Picker - Positioned near Plus button */}
+          {showGifPicker && (
+            <div 
+              ref={gifPickerRef}
+              className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-200 p-3 z-50"
+              style={{ width: '320px', maxHeight: '400px' }}
+            >
+                <input
+                  type="text"
+                  placeholder="Search GIFs..."
+                  value={gifSearchTerm}
+                  onChange={(e) => {
+                    setGifSearchTerm(e.target.value);
+                    if (e.target.value.trim()) {
+                      searchGifs(e.target.value);
+                    } else {
+                      searchGifs('trending');
+                    }
+                  }}
+                  className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                />
+                <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                  {gifResults.length > 0 ? (
+                    gifResults.map((gif: any) => (
+                      <button
+                        key={gif.id}
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setSelectedGif(gif.images.fixed_height.url);
+                          setShowGifPicker(false);
+                          setGifSearchTerm('');
+                        }}
+                        className="hover:opacity-80 transition-opacity"
+                      >
+                        <img
+                          src={gif.images.fixed_height_small.url}
+                          alt={gif.title || 'GIF'}
+                          className="w-full rounded-lg"
+                        />
+                      </button>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500 text-center py-4 col-span-2">Loading GIFs...</p>
+                  )}
+                </div>
+              </div>
+          )}
+
+          {/* Emoji Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setShowEmojiPicker(!showEmojiPicker);
+                setShowPlusMenu(false);
+                setShowGifPicker(false);
+              }}
+              className="p-2 text-slate-400 hover:text-primary cursor-pointer transition-colors"
+            >
+              <Smile size={20} />
+            </button>
+            {/* Emoji Picker - Positioned relative to emoji button */}
+            {showEmojiPicker && (
+              <div 
+                ref={emojiPickerRef}
+                className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-200 p-3 z-50 max-h-64 overflow-y-auto"
+                style={{ width: '280px' }}
+              >
+                <div className="grid grid-cols-8 gap-1">
+                  {emojis.map((emoji, index) => (
+                    <button
+                      key={index}
+                      type="button"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setMessageText(prev => prev + emoji);
+                        setShowEmojiPicker(false);
+                      }}
+                      className="text-xl hover:bg-slate-50 rounded-lg p-1.5 transition-colors cursor-pointer"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+
           <input
             type="text"
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && !uploading && handleSendMessage()}
-            placeholder="Type a message, share images, or ask @AI..."
+            placeholder="Type a message..."
             className="flex-1 bg-transparent border-none outline-none px-3 text-sm text-slate-800 placeholder:text-slate-400"
           />
           <button 
-            onClick={handleSendMessage}
-            disabled={(!messageText.trim() && !imageFile) || uploading}
-            className="p-2 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            type="button"
+            onClick={async (e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              const hasContent = messageText.trim() || imageFile || videoFile || documentFile || selectedGif || (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2);
+              
+              console.log('🔵 Send button clicked!', {
+                hasContent,
+                imageFile: !!imageFile,
+                imageFileName: imageFile?.name,
+                videoFile: !!videoFile,
+                videoFileName: videoFile?.name,
+                documentFile: !!documentFile,
+                documentFileName: documentFile?.name,
+                selectedGif: !!selectedGif,
+                messageText: messageText.trim(),
+                uploading: uploading,
+                selectedGroup: !!selectedGroup,
+                selectedGroupId: selectedGroup?.id,
+                user: !!user,
+                userId: user?.uid
+              });
+              
+              if (!hasContent) {
+                console.warn('⚠️ No content to send');
+                alert('Please add content to send (text, image, video, document, or sticker)');
+                return;
+              }
+              
+              if (uploading) {
+                console.warn('⏳ Already uploading, please wait...');
+                return;
+              }
+              
+              try {
+                await handleSendMessage();
+              } catch (error: any) {
+                console.error('❌ Send button error:', error);
+                alert(`Failed to send message: ${error.message || 'Unknown error'}`);
+              }
+            }}
+            disabled={
+              uploading || 
+              !selectedGroup || 
+              !user ||
+              (!messageText.trim() && 
+               !imageFile && 
+               !videoFile && 
+               !documentFile && 
+               !selectedGif && 
+               !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2))
+            }
+            style={{
+              opacity: (uploading || !selectedGroup || !user || (!messageText.trim() && !imageFile && !videoFile && !documentFile && !selectedGif && !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2))) ? 0.5 : 1,
+              cursor: (uploading || !selectedGroup || !user || (!messageText.trim() && !imageFile && !videoFile && !documentFile && !selectedGif && !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2))) ? 'not-allowed' : 'pointer'
+            }}
+            className={`p-2 rounded-full transition-colors ${
+              (uploading || !selectedGroup || !user || (!messageText.trim() && !imageFile && !videoFile && !documentFile && !selectedGif && !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2)))
+                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                : 'bg-primary text-white hover:bg-indigo-700 cursor-pointer'
+            }`}
+            title={
+              uploading ? "Uploading..." :
+              !selectedGroup ? "Select a group" :
+              !user ? "Please log in" :
+              (!messageText.trim() && !imageFile && !videoFile && !documentFile && !selectedGif && !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2)) 
+                ? "Add content to send" 
+                : "Send message"
+            }
           >
             {uploading ? <div className="w-[18px] h-[18px] border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send size={18} />}
           </button>
         </div>
+
+        {/* Preview */}
+        {imagePreview && (
+          <div className="mt-2 relative inline-block">
+            <img src={imagePreview} alt="Preview" className="max-w-[200px] max-h-[200px] rounded-lg" />
+            <div className="absolute top-1 right-1 flex gap-1">
+              <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Ready to send</span>
+              <button
+                onClick={() => {
+                  console.log('🗑️ Removing image');
+                  setImageFile(null);
+                  setImagePreview('');
+                }}
+                className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <X size={14} />
+              </button>
+      </div>
+          </div>
+        )}
+        {videoFile && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-lg">
+            <Video size={16} className="text-primary" />
+            <span className="flex-1 truncate">{videoFile.name}</span>
+            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Ready to send</span>
+            <button 
+              onClick={() => {
+                console.log('🗑️ Removing video');
+                setVideoFile(null);
+              }} 
+              className="text-red-500 hover:text-red-700"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+        {documentFile && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-lg">
+            <File size={16} className="text-primary" />
+            <span className="flex-1 truncate">{documentFile.name}</span>
+            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Ready to send</span>
+            <button 
+              onClick={() => {
+                console.log('🗑️ Removing document');
+                setDocumentFile(null);
+              }} 
+              className="text-red-500 hover:text-red-700"
+            >
+              <X size={16} />
+            </button>
+          </div>
+        )}
+        {selectedGif && (
+          <div className="mt-2 relative inline-block">
+            <img src={selectedGif} alt="Selected GIF" className="max-w-[200px] max-h-[200px] rounded-lg" />
+            <div className="absolute top-1 right-1 flex gap-1">
+              <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Ready to send</span>
+              <button
+                onClick={() => {
+                  console.log('🗑️ Removing GIF');
+                  setSelectedGif(null);
+                }}
+                className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+              >
+                <X size={14} />
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Join Requests Modal */}

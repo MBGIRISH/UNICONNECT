@@ -8,6 +8,7 @@ export interface User {
   email: string;
   displayName: string;
   photoURL?: string;
+  backgroundImage?: string; // Profile background/banner image
   bio?: string;
   college?: string; // User's college/university
   location?: string;
@@ -44,6 +45,26 @@ export interface Post {
   commentsCount: number;
   createdAt: Timestamp | Date;
   updatedAt: Timestamp | Date;
+  // New features
+  emoji?: string; // Selected emoji
+  gifUrl?: string; // GIF URL from Giphy
+  poll?: {
+    question: string;
+    options: string[];
+    votes?: { [optionIndex: string]: number }; // Total votes per option
+    userVotes?: { [optionIndex: string]: string[] }; // Array of user IDs who voted for each option
+  };
+  tags?: string[]; // Hashtags or tags
+  location?: {
+    name: string;
+    latitude?: number;
+    longitude?: number;
+  };
+  attachments?: {
+    name: string;
+    url: string;
+    type: string; // 'pdf', 'doc', 'image', etc.
+  }[];
 }
 
 export interface Comment {
@@ -139,6 +160,32 @@ export interface JoinRequest {
   createdAt: Timestamp | Date;
 }
 
+export interface StudyGroup extends Group {
+  subject?: string;
+}
+
+export interface ChatMessage {
+  id?: string;
+  text: string;
+  imageUrl?: string;
+  videoUrl?: string;
+  documentUrl?: string;
+  documentName?: string;
+  stickerUrl?: string; // GIF/Sticker URL from GIPHY
+  poll?: {
+    question: string;
+    options: string[];
+    votes?: { [optionIndex: string]: number };
+    userVotes?: { [optionIndex: string]: string[] };
+  };
+  senderId: string;
+  senderName: string;
+  senderPhoto?: string;
+  timestamp: Timestamp | Date;
+  isAi?: boolean;
+  createdAt?: Timestamp | Date;
+}
+
 // ============================================================================
 // MARKETPLACE TYPES
 // ============================================================================
@@ -180,7 +227,8 @@ export type NotificationType =
   | 'event_invite'
   | 'event_update'
   | 'marketplace_inquiry'
-  | 'follow';
+  | 'follow'
+  | 'class_reminder';
 
 export interface Notification {
   id: string;

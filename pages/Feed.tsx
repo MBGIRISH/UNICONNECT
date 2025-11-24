@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Loader2, Upload, GraduationCap } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Loader2, Upload, GraduationCap, Smile, FileText, MapPin, Hash, BarChart3, X } from 'lucide-react';
 import { Post } from '../types';
 import Header from '../components/Header';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, increment, getDoc, getDocs } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, increment, getDoc, getDocs, deleteDoc, setDoc } from 'firebase/firestore';
 import { uploadPostImages } from '../services/cloudinaryService';
 
 const Feed: React.FC = () => {
@@ -15,10 +15,29 @@ const Feed: React.FC = () => {
   const [imagePreview, setImagePreview] = useState('');
   const [uploading, setUploading] = useState(false);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
+  const [pollVotes, setPollVotes] = useState<{[postId: string]: Set<number>}>({}); // Track which options user voted for
   const [showCommentsFor, setShowCommentsFor] = useState<string | null>(null);
   const [comments, setComments] = useState<{[key: string]: any[]}>({});
   const [newComment, setNewComment] = useState('');
   const { user } = useAuth();
+  
+  // New feature states
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showPollCreator, setShowPollCreator] = useState(false);
+  const [selectedGif, setSelectedGif] = useState<string | null>(null);
+  const [gifSearchTerm, setGifSearchTerm] = useState('');
+  const [gifResults, setGifResults] = useState<any[]>([]);
+  const [pollQuestion, setPollQuestion] = useState('');
+  const [pollOptions, setPollOptions] = useState(['', '']);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [location, setLocation] = useState<{name: string; latitude?: number; longitude?: number} | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<{name: string; type: string} | null>(null);
+  
+  const emojiPickerRef = useRef<HTMLDivElement>(null);
+  const gifPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Real-time listener for posts
@@ -52,6 +71,23 @@ const Feed: React.FC = () => {
     };
   }, []);
 
+  // Close pickers when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (emojiPickerRef.current && !emojiPickerRef.current.contains(event.target as Node)) {
+        setShowEmojiPicker(false);
+      }
+      if (gifPickerRef.current && !gifPickerRef.current.contains(event.target as Node)) {
+        setShowGifPicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
+
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -65,8 +101,114 @@ const Feed: React.FC = () => {
     }
   };
 
+  // Emoji picker
+  const commonEmojis = ['😀', '😂', '❤️', '👍', '🎉', '🔥', '💯', '😍', '🙌', '✨', '🎊', '😊', '🥳', '💪', '🌟', '😎', '🎈', '💖', '👏', '🎁'];
+  
+  const handleEmojiSelect = (emoji: string) => {
+    setNewPostText(prev => prev + emoji);
+    setShowEmojiPicker(false);
+  };
+
+  // GIF search using Giphy API (using public demo key)
+  const searchGifs = async (searchTerm: string) => {
+    try {
+      // Using Giphy's public demo API key (limited but works)
+      // For production, get your own free API key from https://developers.giphy.com/
+      const apiKey = '3XEocAPxmO6auiyHBqiHea0eeu9XnGo4'; // Giphy API key
+      let url = '';
+      
+      if (searchTerm.trim()) {
+        url = `https://api.giphy.com/v1/gifs/search?api_key=${apiKey}&q=${encodeURIComponent(searchTerm)}&limit=20&rating=g`;
+      } else {
+        url = `https://api.giphy.com/v1/gifs/trending?api_key=${apiKey}&limit=20&rating=g`;
+      }
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.data) {
+        setGifResults(data.data);
+      } else {
+        // Fallback: Show message to configure API key
+        setGifResults([]);
+        console.warn('Giphy API key not configured. Get a free key from https://developers.giphy.com/');
+      }
+    } catch (error) {
+      console.error('Error fetching GIFs:', error);
+      setGifResults([]);
+    }
+  };
+
+  // Handle tag input
+  const handleTagInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      const newTag = tagInput.trim().replace('#', '');
+      if (!tags.includes(newTag) && tags.length < 5) {
+        setTags([...tags, newTag]);
+        setTagInput('');
+      }
+    }
+  };
+
+  // Handle location
+  const handleGetLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+            // Reverse geocoding to get location name
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+            const data = await response.json();
+            setLocation({
+              name: data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+              latitude,
+              longitude
+            });
+          } catch (error) {
+            setLocation({
+              name: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+              latitude,
+              longitude
+            });
+          }
+        },
+        (error) => {
+          alert('Could not get location. Please enter manually.');
+        }
+      );
+    } else {
+      alert('Geolocation is not supported by your browser.');
+    }
+  };
+
+  // Handle attachment
+  const handleAttachmentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAttachmentFile(file);
+      setAttachmentPreview({
+        name: file.name,
+        type: file.type.split('/')[0] || 'file'
+      });
+    }
+  };
+
+  // Add poll option
+  const addPollOption = () => {
+    if (pollOptions.length < 4) {
+      setPollOptions([...pollOptions, '']);
+    }
+  };
+
+  // Remove poll option
+  const removePollOption = (index: number) => {
+    if (pollOptions.length > 2) {
+      setPollOptions(pollOptions.filter((_, i) => i !== index));
+    }
+  };
+
   const handlePost = async () => {
-    if (!newPostText.trim()) return;
+    if (!newPostText.trim() && !selectedGif && !imageFile && !pollQuestion) return;
     
     if (!user) {
       alert('Please log in to create a post');
@@ -83,6 +225,16 @@ const Feed: React.FC = () => {
         imageUrls = await uploadPostImages(postId, [imageFile]);
       }
 
+      // Upload attachment if present
+      let attachmentUrl = null;
+      if (attachmentFile) {
+        // For now, we'll upload to Cloudinary as well
+        // In production, you might want a separate file storage service
+        const postId = `temp_${Date.now()}`;
+        const uploaded = await uploadPostImages(postId, [attachmentFile]);
+        attachmentUrl = uploaded[0];
+      }
+
       if (db) {
           // Fetch user's college from their profile
           let userCollege = '';
@@ -95,7 +247,7 @@ const Feed: React.FC = () => {
             console.error('Error fetching user college:', error);
           }
 
-          await addDoc(collection(db, "posts"), {
+          const postData: any = {
             authorId: user.uid,
             authorName: user.displayName || 'Student',
             authorAvatar: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Student')}`,
@@ -106,10 +258,56 @@ const Feed: React.FC = () => {
             commentsCount: 0,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp()
-          });
+          };
+
+          // Add new features
+          if (selectedGif) postData.gifUrl = selectedGif;
+          if (pollQuestion && pollOptions.filter(o => o.trim()).length >= 2) {
+            const validOptions = pollOptions.filter(o => o.trim());
+            const initialVotes: {[key: string]: number} = {};
+            const initialUserVotes: {[key: string]: string[]} = {};
+            
+            // Initialize votes for each option
+            validOptions.forEach((_, index) => {
+              initialVotes[index.toString()] = 0;
+              initialUserVotes[index.toString()] = [];
+            });
+            
+            postData.poll = {
+              question: pollQuestion,
+              options: validOptions,
+              votes: initialVotes,
+              userVotes: initialUserVotes
+            };
+          }
+          if (tags.length > 0) postData.tags = tags;
+          if (location) postData.location = location;
+          if (attachmentUrl && attachmentPreview) {
+            postData.attachments = [{
+              name: attachmentPreview.name,
+              url: attachmentUrl,
+              type: attachmentPreview.type
+            }];
+          }
+
+          await addDoc(collection(db, "posts"), postData);
+          
+          // Reset all states
           setNewPostText('');
           setImageFile(null);
           setImagePreview('');
+          setSelectedGif(null);
+          setShowPollCreator(false);
+          setPollQuestion('');
+          setPollOptions(['', '']);
+          setTags([]);
+          setTagInput('');
+          setLocation(null);
+          setAttachmentFile(null);
+          setAttachmentPreview(null);
+          setShowEmojiPicker(false);
+          setShowGifPicker(false);
+          
           alert('Post created successfully!');
       } else {
           throw new Error("DB Offline");
@@ -127,10 +325,18 @@ const Feed: React.FC = () => {
 
     try {
       const postRef = doc(db, 'posts', postId);
+      const likeRef = doc(db, 'posts', postId, 'likes', user.uid);
       const isLiked = likedPosts.has(postId);
 
-      if (isLiked) {
-        // Unlike
+      // Check if like document exists (double-check)
+      const likeDoc = await getDoc(likeRef);
+      const actuallyLiked = likeDoc.exists();
+
+      if (isLiked || actuallyLiked) {
+        // Unlike - remove like document
+        if (actuallyLiked) {
+          await deleteDoc(likeRef);
+        }
         await updateDoc(postRef, {
           likesCount: increment(-1)
         });
@@ -140,7 +346,12 @@ const Feed: React.FC = () => {
           return newSet;
         });
       } else {
-        // Like
+        // Like - create like document to track user
+        await setDoc(likeRef, {
+          userId: user.uid,
+          userName: user.displayName || 'User',
+          createdAt: serverTimestamp()
+        });
         await updateDoc(postRef, {
           likesCount: increment(1)
         });
@@ -148,6 +359,7 @@ const Feed: React.FC = () => {
       }
     } catch (error) {
       console.error('Error toggling like:', error);
+      alert('Failed to like post. Please try again.');
     }
   };
 
@@ -264,11 +476,260 @@ const Feed: React.FC = () => {
                     </button>
                   </div>
                 )}
+                {/* Inline Tag Input */}
+                <input
+                  id="tag-input"
+                  type="text"
+                  placeholder="#tag (press Enter)"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyPress={handleTagInput}
+                  className="mt-2 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  style={{ display: 'none' }}
+                />
             </div>
           </div>
-          <div className="flex justify-between items-center border-t border-slate-100 pt-3">
-            <div className="flex gap-2">
-              <label className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer">
+          {/* Poll Creator */}
+          {showPollCreator && (
+            <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-sm text-slate-700">Create Poll</h4>
+                <button onClick={() => setShowPollCreator(false)} className="text-slate-400 hover:text-slate-600">
+                  <X size={16} />
+                </button>
+              </div>
+              <input
+                type="text"
+                placeholder="Ask a question..."
+                value={pollQuestion}
+                onChange={(e) => setPollQuestion(e.target.value)}
+                className="w-full px-3 py-2 mb-2 bg-white rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              />
+              <div className="space-y-2">
+                {pollOptions.map((option, index) => (
+                  <div key={index} className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder={`Option ${index + 1}`}
+                      value={option}
+                      onChange={(e) => {
+                        const newOptions = [...pollOptions];
+                        newOptions[index] = e.target.value;
+                        setPollOptions(newOptions);
+                      }}
+                      className="flex-1 px-3 py-2 bg-white rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    {pollOptions.length > 2 && (
+                      <button
+                        onClick={() => removePollOption(index)}
+                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                      >
+                        <X size={16} />
+                      </button>
+                    )}
+                  </div>
+                ))}
+                {pollOptions.length < 4 && (
+                  <button
+                    onClick={addPollOption}
+                    className="text-sm text-primary hover:text-indigo-700 font-medium"
+                  >
+                    + Add Option
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Tags */}
+          {tags.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-2">
+              {tags.map((tag, index) => (
+                <span
+                  key={index}
+                  className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium"
+                >
+                  #{tag}
+                  <button
+                    onClick={() => setTags(tags.filter((_, i) => i !== index))}
+                    className="hover:text-indigo-900"
+                  >
+                    <X size={12} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {/* Location */}
+          {location && (
+            <div className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+              <MapPin size={14} />
+              <span className="truncate">{location.name}</span>
+              <button onClick={() => setLocation(null)} className="text-slate-400 hover:text-slate-600">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* Attachment Preview */}
+          {attachmentPreview && (
+            <div className="mt-2 flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+              <FileText size={16} className="text-slate-600" />
+              <span className="text-sm text-slate-700 truncate flex-1">{attachmentPreview.name}</span>
+              <button onClick={() => {
+                setAttachmentFile(null);
+                setAttachmentPreview(null);
+              }} className="text-slate-400 hover:text-slate-600">
+                <X size={14} />
+              </button>
+            </div>
+          )}
+
+          {/* GIF Preview */}
+          {selectedGif && (
+            <div className="mt-2 relative">
+              <img src={selectedGif} alt="Selected GIF" className="h-32 rounded-lg object-cover" />
+              <button
+                onClick={() => setSelectedGif(null)}
+                className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs hover:bg-black/70"
+              >
+                <X size={12} />
+              </button>
+            </div>
+          )}
+
+          <div className="flex justify-between items-center border-t border-slate-100 pt-3 mt-3">
+            <div className="flex gap-1 md:gap-2 flex-wrap">
+              {/* Emoji Picker */}
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setShowEmojiPicker(!showEmojiPicker);
+                    setShowGifPicker(false);
+                  }}
+                  className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors"
+                  title="Add Emoji"
+                >
+                  <Smile size={20} />
+                </button>
+                {showEmojiPicker && (
+                  <div
+                    ref={emojiPickerRef}
+                    className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
+                    style={{ width: '280px' }}
+                  >
+                    <div className="grid grid-cols-5 gap-2">
+                      {commonEmojis.map((emoji, index) => (
+                        <button
+                          key={index}
+                          onClick={() => handleEmojiSelect(emoji)}
+                          className="text-2xl hover:bg-slate-50 rounded-lg p-2 transition-colors"
+                        >
+                          {emoji}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* GIF Picker */}
+              <div className="relative">
+                <button
+                  onClick={() => {
+                    setShowGifPicker(!showGifPicker);
+                    setShowEmojiPicker(false);
+                    if (!showGifPicker) {
+                      searchGifs('trending');
+                    }
+                  }}
+                  className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors"
+                  title="Add GIF"
+                >
+                  <ImageIcon size={20} />
+                </button>
+                {showGifPicker && (
+                  <div
+                    ref={gifPickerRef}
+                    className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
+                    style={{ width: '320px', maxHeight: '400px' }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="Search GIFs..."
+                      value={gifSearchTerm}
+                      onChange={(e) => {
+                        setGifSearchTerm(e.target.value);
+                        searchGifs(e.target.value);
+                      }}
+                      className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    />
+                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                      {gifResults.map((gif: any) => (
+                        <button
+                          key={gif.id}
+                          onClick={() => {
+                            setSelectedGif(gif.images.fixed_height.url);
+                            setShowGifPicker(false);
+                          }}
+                          className="hover:opacity-80 transition-opacity"
+                        >
+                          <img
+                            src={gif.images.fixed_height_small.url}
+                            alt={gif.title}
+                            className="w-full rounded-lg"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Poll Creator */}
+              <button
+                onClick={() => {
+                  setShowPollCreator(!showPollCreator);
+                  setShowEmojiPicker(false);
+                  setShowGifPicker(false);
+                }}
+                className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
+                  showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
+                }`}
+                title="Create Poll"
+              >
+                <BarChart3 size={20} />
+              </button>
+
+              {/* Tag Input */}
+              <button
+                onClick={() => {
+                  const input = document.getElementById('tag-input') as HTMLInputElement;
+                  if (input) {
+                    input.style.display = input.style.display === 'none' ? 'block' : 'none';
+                    if (input.style.display !== 'none') input.focus();
+                  }
+                }}
+                className="p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors"
+                title="Add Tags"
+              >
+                <Hash size={20} />
+              </button>
+
+              {/* Location */}
+              <button
+                onClick={handleGetLocation}
+                className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
+                  location ? 'text-primary bg-indigo-50' : 'text-slate-600'
+                }`}
+                title="Add Location"
+              >
+                <MapPin size={20} />
+              </button>
+
+              {/* Image Upload */}
+              <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors" title="Upload Image">
                 <Upload size={20} />
                 <input 
                   type="file" 
@@ -277,19 +738,33 @@ const Feed: React.FC = () => {
                   className="hidden"
                 />
               </label>
+
+              {/* File Attachment */}
+              <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors" title="Attach File">
+                <FileText size={20} />
+                <input 
+                  type="file" 
+                  accept=".pdf,.doc,.docx,.txt,.zip"
+                  onChange={handleAttachmentSelect}
+                  className="hidden"
+                />
+              </label>
             </div>
             <button 
                 onClick={handlePost}
-                disabled={!newPostText.trim() || uploading}
-                className="bg-primary hover:bg-indigo-700 text-white px-6 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
+                disabled={(!newPostText.trim() && !selectedGif && !imageFile && !pollQuestion) || uploading}
+                className="bg-primary hover:bg-indigo-700 text-white px-4 md:px-6 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
             >
               {uploading ? (
                 <>
                   <Loader2 size={16} className="animate-spin" />
-                  Posting...
+                  <span className="hidden md:inline">Posting...</span>
                 </>
               ) : (
-                'Post'
+                <>
+                  <span className="hidden md:inline">Post</span>
+                  <span className="md:hidden">✓</span>
+                </>
               )}
             </button>
           </div>
@@ -325,9 +800,166 @@ const Feed: React.FC = () => {
 
                 <div className="px-4 pb-3">
                     <p className="text-slate-800 leading-relaxed whitespace-pre-line">{post.content}</p>
+                    
+                    {/* Tags */}
+                    {post.tags && post.tags.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {post.tags.map((tag, index) => (
+                          <span
+                            key={index}
+                            className="inline-block px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium"
+                          >
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Location */}
+                    {post.location && (
+                      <div className="flex items-center gap-1 mt-2 text-xs text-slate-500">
+                        <MapPin size={12} />
+                        <span>{post.location.name}</span>
+                      </div>
+                    )}
+
+                    {/* Attachments */}
+                    {post.attachments && post.attachments.length > 0 && (
+                      <div className="mt-2 space-y-2">
+                        {post.attachments.map((attachment, index) => (
+                          <a
+                            key={index}
+                            href={attachment.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="flex items-center gap-2 p-2 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors"
+                          >
+                            <FileText size={16} className="text-slate-600" />
+                            <span className="text-sm text-slate-700 truncate">{attachment.name}</span>
+                          </a>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Poll */}
+                    {post.poll && (
+                      <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+                        <h4 className="font-semibold text-sm text-slate-800 mb-3">{post.poll.question}</h4>
+                        <div className="space-y-2">
+                          {post.poll.options.map((option, index) => {
+                            const votes = post.poll?.votes?.[index.toString()] || 0;
+                            const totalVotes = Object.values(post.poll?.votes || {}).reduce((a: number, b: number) => a + b, 0) || 0;
+                            const percentage = totalVotes > 0 ? (votes / totalVotes) * 100 : 0;
+                            
+                            // Check if current user voted for this option
+                            const userVotedForThis = pollVotes[post.id]?.has(index) || false;
+                            const optionVoters = post.poll?.userVotes?.[index.toString()] || [];
+                            const userHasVoted = user ? optionVoters.includes(user.uid) : false;
+                            
+                            return (
+                              <div key={index} className="relative">
+                                <button
+                                  onClick={async () => {
+                                    if (!user || !db) {
+                                      alert('Please log in to vote');
+                                      return;
+                                    }
+                                    
+                                    try {
+                                      const postRef = doc(db, 'posts', post.id);
+                                      const postSnap = await getDoc(postRef);
+                                      if (!postSnap.exists()) return;
+                                      
+                                      const postData = postSnap.data();
+                                      const currentVotes = postData.poll?.votes || {};
+                                      const currentUserVotes = postData.poll?.userVotes || {};
+                                      const optionKey = index.toString();
+                                      
+                                      // Check if user already voted for this option
+                                      const optionVoters = currentUserVotes[optionKey] || [];
+                                      const hasVoted = optionVoters.includes(user.uid);
+                                      
+                                      if (hasVoted) {
+                                        // Remove vote
+                                        const newVoters = optionVoters.filter((uid: string) => uid !== user.uid);
+                                        const newVoteCount = Math.max(0, (currentVotes[optionKey] || 0) - 1);
+                                        
+                                        await updateDoc(postRef, {
+                                          [`poll.votes.${optionKey}`]: newVoteCount,
+                                          [`poll.userVotes.${optionKey}`]: newVoters
+                                        });
+                                        
+                                        // Update local state
+                                        setPollVotes(prev => {
+                                          const postVotes = prev[post.id] || new Set<number>();
+                                          const newPostVotes = new Set(postVotes);
+                                          newPostVotes.delete(index);
+                                          return { ...prev, [post.id]: newPostVotes };
+                                        });
+                                      } else {
+                                        // Add vote
+                                        const newVoters = [...optionVoters, user.uid];
+                                        const newVoteCount = (currentVotes[optionKey] || 0) + 1;
+                                        
+                                        await updateDoc(postRef, {
+                                          [`poll.votes.${optionKey}`]: newVoteCount,
+                                          [`poll.userVotes.${optionKey}`]: newVoters
+                                        });
+                                        
+                                        // Update local state
+                                        setPollVotes(prev => {
+                                          const postVotes = prev[post.id] || new Set<number>();
+                                          const newPostVotes = new Set(postVotes);
+                                          newPostVotes.add(index);
+                                          return { ...prev, [post.id]: newPostVotes };
+                                        });
+                                      }
+                                    } catch (error) {
+                                      console.error('Error voting:', error);
+                                      alert('Failed to vote. Please try again.');
+                                    }
+                                  }}
+                                  className={`w-full text-left px-3 py-2 rounded-lg border transition-colors ${
+                                    userHasVoted 
+                                      ? 'bg-indigo-100 border-indigo-300' 
+                                      : 'bg-white border-slate-200 hover:border-indigo-300'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                      <span className="text-sm text-slate-700">{option}</span>
+                                      {userHasVoted && (
+                                        <span className="text-xs text-indigo-600 font-medium">✓ Voted</span>
+                                      )}
+                                    </div>
+                                    <span className="text-xs text-slate-500">{votes} votes</span>
+                                  </div>
+                                  {totalVotes > 0 && (
+                                    <div className="mt-1 h-1 bg-slate-200 rounded-full overflow-hidden">
+                                      <div
+                                        className="h-full bg-indigo-500 rounded-full transition-all"
+                                        style={{ width: `${percentage}%` }}
+                                      />
+                                    </div>
+                                  )}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
                 </div>
 
-                {post.imageUrls?.[0] && (
+                {/* GIF */}
+                {post.gifUrl && (
+                  <div className="w-full bg-slate-100">
+                    <img src={post.gifUrl} alt="GIF" className="w-full h-auto max-h-[500px] object-cover" />
+                  </div>
+                )}
+
+                {/* Image */}
+                {post.imageUrls?.[0] && !post.gifUrl && (
                     <div className="w-full bg-slate-100">
                     <img src={post.imageUrls[0]} alt="Post content" className="w-full h-auto max-h-[500px] object-cover" />
                     </div>

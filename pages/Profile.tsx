@@ -4,7 +4,7 @@ import { MapPin, Globe, Phone, Mail, Edit2, Share2, Loader2, Upload, X, Check, M
 import Header from '../components/Header';
 import { useAuth } from '../App';
 import { useNavigate } from 'react-router-dom';
-import { getUserProfile, updateUserProfile, copyProfileLink, shareProfile, uploadAndUpdateAvatar } from '../services/profileService';
+import { getUserProfile, updateUserProfile, copyProfileLink, shareProfile, uploadAndUpdateAvatar, uploadAndUpdateBackgroundImage } from '../services/profileService';
 import { logout } from '../services/authService';
 import { blockUser, unblockUser, isUserBlocked } from '../services/moderationService';
 import ReportModal from '../components/ReportModal';
@@ -138,10 +138,12 @@ const Profile: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [backgroundFile, setBackgroundFile] = useState<File | null>(null);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isBlocked, setIsBlocked] = useState(false);
   const [avatarPreview, setAvatarPreview] = useState<string>('');
+  const [backgroundPreview, setBackgroundPreview] = useState<string>('');
   
   const [editData, setEditData] = useState({
     displayName: '',
@@ -233,6 +235,18 @@ const Profile: React.FC = () => {
     }
   };
 
+  const handleBackgroundChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setBackgroundFile(file);
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setBackgroundPreview(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   const handleSave = async () => {
     if (!currentUser || !profile) return;
 
@@ -246,29 +260,36 @@ const Profile: React.FC = () => {
       // Upload new avatar if selected (using Cloudinary - free!)
       if (avatarFile) {
         photoURL = await uploadAndUpdateAvatar(currentUser.uid, avatarFile);
-      } else {
-        // Just update profile info
-        await updateUserProfile(currentUser.uid, {
-          displayName: editData.displayName,
-          bio: editData.bio,
-          college: finalCollege,
-          location: editData.location,
-          phone: editData.phone,
-          website: editData.website,
-          socialLinks: {
-            twitter: editData.twitter,
-            linkedin: editData.linkedin,
-            github: editData.github,
-            instagram: editData.instagram
-          }
-        });
       }
+
+      // Upload new background image if selected
+      if (backgroundFile) {
+        await uploadAndUpdateBackgroundImage(currentUser.uid, backgroundFile);
+      }
+
+      // Update profile info
+      await updateUserProfile(currentUser.uid, {
+        displayName: editData.displayName,
+        bio: editData.bio,
+        college: finalCollege,
+        location: editData.location,
+        phone: editData.phone,
+        website: editData.website,
+        socialLinks: {
+          twitter: editData.twitter,
+          linkedin: editData.linkedin,
+          github: editData.github,
+          instagram: editData.instagram
+        }
+      });
 
       // Reload profile
       await loadProfile();
       setIsEditing(false);
       setAvatarFile(null);
       setAvatarPreview('');
+      setBackgroundFile(null);
+      setBackgroundPreview('');
     } catch (error: any) {
       console.error('Error saving profile:', error);
       alert(error.message || 'Failed to save profile. Please try again.');
@@ -348,7 +369,29 @@ const Profile: React.FC = () => {
       <div className="max-w-4xl mx-auto p-4 md:p-6">
         <div className="bg-white md:rounded-3xl overflow-hidden shadow-sm border border-slate-100">
           {/* Banner */}
-          <div className="h-32 md:h-48 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+          <div className="relative h-32 md:h-48 overflow-hidden">
+            {backgroundPreview || profile.backgroundImage ? (
+              <img 
+                src={backgroundPreview || profile.backgroundImage} 
+                alt="Profile background" 
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500"></div>
+            )}
+            {isEditing && isOwnProfile && (
+              <label className="absolute top-4 right-4 bg-white/90 hover:bg-white text-slate-700 px-4 py-2 rounded-lg cursor-pointer font-medium text-sm flex items-center gap-2 shadow-md transition-colors">
+                <Upload size={16} />
+                {backgroundFile || profile.backgroundImage ? 'Change Background' : 'Add Background'}
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={handleBackgroundChange}
+                  className="hidden"
+                />
+              </label>
+            )}
+          </div>
           
           <div className="px-6 pb-6">
             <div className="flex flex-col md:flex-row items-start md:items-end gap-4 -mt-12 mb-6 px-4 md:px-0">
@@ -399,6 +442,7 @@ const Profile: React.FC = () => {
                         onClick={() => {
                           setIsEditing(false);
                           setAvatarPreview('');
+                          setBackgroundPreview('');
                         }}
                         className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50"
                       >

@@ -1,24 +1,23 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Lock, Mail, ArrowRight, Loader2, AlertCircle, Eye, EyeOff, Key, CheckCircle } from 'lucide-react';
-import { signUp, signIn, signInWithGoogle, sendPasswordResetCode, verifyResetCode, resetPasswordWithCode, confirmPasswordResetWithActionCode } from '../services/authService';
+import { User, Lock, Mail, ArrowRight, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
+import { signUp, signIn, signInWithGoogle, sendPasswordResetCode, confirmPasswordResetWithActionCode } from '../services/authService';
 
 const Login: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
-  const [resetStep, setResetStep] = useState<'email' | 'code' | 'password'>('email'); // New: multi-step reset
+  const [resetStep, setResetStep] = useState<'email' | 'password'>('email');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [resetCode, setResetCode] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
-  const [codeSent, setCodeSent] = useState(false);
+  const [storedActionCode, setStoredActionCode] = useState<string | null>(null);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -26,52 +25,64 @@ const Login: React.FC = () => {
   const actionCode = searchParams.get('oobCode');
   const mode = searchParams.get('mode');
   
-  // Handle action code from email link
+  // Handle action code from email link - show password reset form
   useEffect(() => {
     if (actionCode && mode === 'resetPassword') {
+      // User clicked email link - show password reset form
       setIsForgotPassword(true);
       setResetStep('password');
-      // Store action code for later use
-      (window as any).__resetActionCode = actionCode;
+      
       // Get email from URL
       const emailParam = searchParams.get('email');
       if (emailParam) {
         setEmail(emailParam);
-        
-        // Try to get stored password from Firestore
-        const getStoredPassword = async () => {
-          try {
-            const { doc, getDoc } = await import('firebase/firestore');
-            const { db } = await import('../firebaseConfig');
-            const codeDoc = await getDoc(doc(db, 'passwordResetCodes', emailParam.toLowerCase()));
-            if (codeDoc.exists()) {
-              const codeData = codeDoc.data();
-              if (codeData.newPassword && codeData.waitingForActionCode) {
-                // We have stored password, user can just confirm it
-                setNewPassword(codeData.newPassword);
-                setConfirmPassword(codeData.newPassword);
-                setSuccess('Password found. Please confirm and click "Reset Password" to complete.');
-              }
-            }
-          } catch (err) {
-            console.error('Error getting stored password:', err);
-            // Continue without stored password - user will enter it manually
-          }
-        };
-        getStoredPassword();
       }
-      // Clear URL params but keep action code
-      setSearchParams({ oobCode: actionCode, mode: 'resetPassword' });
+      
+      // Store action code in state (persists across re-renders)
+      setStoredActionCode(actionCode);
+      // Also store in window as backup
+      (window as any).__resetActionCode = actionCode;
+      
+      // Clear URL params but keep action code in state
+      setSearchParams({});
+      
+      setSuccess('Please enter your new password below.');
     }
   }, [actionCode, mode, searchParams, setSearchParams]);
   
   // Handle password reset with action code
   const handlePasswordResetWithActionCode = async (newPass: string) => {
-    const storedActionCode = (window as any).__resetActionCode || actionCode;
-    if (!storedActionCode) {
-      throw new Error('Reset link is invalid or expired');
+    // Get action code from state (preferred) or window (backup)
+    const codeToUse = storedActionCode || (window as any).__resetActionCode || actionCode;
+    
+    if (!codeToUse) {
+      throw new Error('Reset link is invalid or expired. Please request a new password reset.');
     }
-    await confirmPasswordResetWithActionCode(storedActionCode, newPass);
+    
+    // Verify action code format
+    if (codeToUse.length < 20) {
+      throw new Error('Invalid reset link. Please request a new password reset.');
+    }
+    
+    console.log('Attempting password reset with action code...');
+    
+    // Call Firebase to actually update the password
+    try {
+      await confirmPasswordResetWithActionCode(codeToUse, newPass);
+      console.log('Password reset successful!');
+      
+      // Clear the stored action code after successful reset
+      setStoredActionCode(null);
+      (window as any).__resetActionCode = null;
+    } catch (error: any) {
+      console.error('Password reset error:', error);
+      // Clear invalid action code
+      if (error.code === 'auth/expired-action-code' || error.code === 'auth/invalid-action-code') {
+        setStoredActionCode(null);
+        (window as any).__resetActionCode = null;
+      }
+      throw error;
+    }
   };
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -83,28 +94,17 @@ const Login: React.FC = () => {
     try {
       if (isForgotPassword) {
         if (resetStep === 'email') {
-          // Step 1: Send verification code
+          // Step 1: Send password reset email
           if (!email || !email.trim()) {
             throw new Error('Please enter your email address');
           }
 
           await sendPasswordResetCode(email);
-          setCodeSent(true);
-          setResetStep('code');
-          setSuccess('Verification code sent to your email! Please check your inbox and spam folder.');
+          setSuccess('Password reset email sent! Please check your email and click the reset link. You will be able to enter your new password on that page.');
           setError('');
-        } else if (resetStep === 'code') {
-          // Step 2: Verify code
-          if (!resetCode || resetCode.trim().length !== 6) {
-            throw new Error('Please enter the 6-digit code');
-          }
-
-          await verifyResetCode(email, resetCode);
-          setResetStep('password');
-          setSuccess('Code verified! Please enter your new password.');
-          setError('');
+          // Don't change step - user needs to click email link
         } else if (resetStep === 'password') {
-          // Step 3: Reset password
+          // Reset password using action code from email link
           if (!newPassword || newPassword.length < 6) {
             throw new Error('Password must be at least 6 characters');
           }
@@ -113,30 +113,44 @@ const Login: React.FC = () => {
             throw new Error('Passwords do not match');
           }
 
-          // Check if we have action code from email link
-          const storedActionCode = (window as any).__resetActionCode || actionCode;
-          if (storedActionCode) {
-            // Direct reset with action code (user clicked email link)
-            await handlePasswordResetWithActionCode(newPassword);
-            setSuccess('Password reset successful! You can now sign in with your new password.');
-          } else {
-            // Code-based reset - send email with reset link
-            await resetPasswordWithCode(email, resetCode, newPassword);
-            setSuccess('Password reset email sent! Please check your email and click the reset link to complete the process. Your new password has been saved and will be applied when you click the link.');
+          // Get action code from state or window
+          const codeToUse = storedActionCode || (window as any).__resetActionCode || actionCode;
+          if (!codeToUse) {
+            throw new Error('Reset link is invalid or expired. Please request a new password reset.');
           }
-          
-          setTimeout(() => {
-            setIsForgotPassword(false);
-            setResetStep('email');
-            setEmail('');
-            setResetCode('');
-            setNewPassword('');
-            setConfirmPassword('');
-            setCodeSent(false);
-            setSuccess('');
+
+          // Reset password immediately using action code
+          try {
+            console.log('Resetting password with action code...');
+            await handlePasswordResetWithActionCode(newPassword);
+            
+            console.log('Password reset completed successfully!');
+            setSuccess('Password reset successful! Your new password is now active. Redirecting to login...');
+            
+            // Clear all reset-related state
+            setStoredActionCode(null);
             (window as any).__resetActionCode = null;
-            setSearchParams({});
-          }, storedActionCode ? 3000 : 6000);
+            
+            // Wait a moment for Firebase to propagate the password change
+            // Then redirect to login after 2 seconds
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            setTimeout(() => {
+              setIsForgotPassword(false);
+              setResetStep('email');
+              setEmail('');
+              setNewPassword('');
+              setConfirmPassword('');
+              setSuccess('');
+              setSearchParams({});
+              // Force navigation to login page - clear any cached auth state
+              window.location.href = '/login';
+            }, 2000);
+          } catch (resetError: any) {
+            console.error('Password reset failed:', resetError);
+            // Re-throw to be caught by outer catch block
+            throw resetError;
+          }
         }
       } else if (isLogin) {
         const user = await signIn(email, password);
@@ -268,37 +282,7 @@ const Login: React.FC = () => {
               </div>
             )}
 
-            {/* Verification Code field (Step 2) */}
-            {isForgotPassword && resetStep === 'code' && (
-              <div className="relative">
-                <Key className="absolute left-3 top-3.5 text-slate-400" size={20} />
-                <input
-                  type="text"
-                  placeholder="Enter 6-digit code"
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-center text-2xl font-mono tracking-widest"
-                  value={resetCode}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, '').slice(0, 6);
-                    setResetCode(value);
-                    setError('');
-                  }}
-                  required
-                  maxLength={6}
-                  autoComplete="off"
-                />
-                <p className="text-xs text-slate-500 mt-1 ml-1 text-center">
-                  Check your email for the verification code
-                </p>
-                {codeSent && (
-                  <p className="text-xs text-indigo-600 mt-1 ml-1 text-center flex items-center justify-center gap-1">
-                    <CheckCircle size={12} />
-                    Code sent to {email}
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* New Password fields (Step 3) */}
+            {/* New Password fields - shown when user clicks email link */}
             {isForgotPassword && resetStep === 'password' && (
               <>
                 <div className="relative">
@@ -405,9 +389,7 @@ const Login: React.FC = () => {
                 <>
                   {isForgotPassword 
                     ? (resetStep === 'email' 
-                        ? 'Send Verification Code' 
-                        : resetStep === 'code' 
-                        ? 'Verify Code' 
+                        ? 'Send Reset Link' 
                         : 'Reset Password')
                     : isLogin 
                     ? 'Sign In' 
@@ -448,21 +430,20 @@ const Login: React.FC = () => {
           <div className="mt-6 text-center">
             {isForgotPassword ? (
               <div className="space-y-2">
-                {resetStep !== 'email' && (
+                {resetStep === 'password' && (
                   <button
                     type="button"
                     onClick={() => {
-                      if (resetStep === 'code') {
-                        setResetStep('email');
-                        setResetCode('');
-                        setCodeSent(false);
-                      } else if (resetStep === 'password') {
-                        setResetStep('code');
-                        setNewPassword('');
-                        setConfirmPassword('');
-                      }
+                      setIsForgotPassword(false);
+                      setResetStep('email');
+                      setEmail('');
+                      setNewPassword('');
+                      setConfirmPassword('');
                       setError('');
                       setSuccess('');
+                      setStoredActionCode(null);
+                      (window as any).__resetActionCode = null;
+                      setSearchParams({});
                     }}
                     className="text-slate-500 hover:text-indigo-600 text-sm font-medium transition-colors"
                   >
@@ -475,12 +456,12 @@ const Login: React.FC = () => {
                     setIsForgotPassword(false);
                     setResetStep('email');
                     setEmail('');
-                    setResetCode('');
                     setNewPassword('');
                     setConfirmPassword('');
-                    setCodeSent(false);
                     setError('');
                     setSuccess('');
+                    (window as any).__resetActionCode = null;
+                    setSearchParams({});
                   }}
                   className="text-slate-500 hover:text-indigo-600 text-sm font-medium transition-colors block w-full"
                 >

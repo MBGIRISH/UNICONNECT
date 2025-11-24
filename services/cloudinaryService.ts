@@ -72,6 +72,13 @@ export const uploadAvatar = async (userId: string, file: File): Promise<string> 
 };
 
 /**
+ * Upload profile background image
+ */
+export const uploadBackgroundImage = async (userId: string, file: File): Promise<string> => {
+  return uploadImageToCloudinary(file, `uniconnect/backgrounds/${userId}`);
+};
+
+/**
  * Upload post images
  */
 export const uploadPostImages = async (postId: string, files: File[]): Promise<string[]> => {

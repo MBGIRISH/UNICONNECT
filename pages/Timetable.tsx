@@ -28,6 +28,7 @@ const Timetable: React.FC = () => {
   const [upcomingClass, setUpcomingClass] = useState<ClassItem | null>(null);
   const [ongoingClass, setOngoingClass] = useState<ClassItem | null>(null);
   const [notifiedClasses, setNotifiedClasses] = useState<Set<string>>(new Set());
+  const [lastNotificationDate, setLastNotificationDate] = useState<string>('');
   
   const [newClass, setNewClass] = useState({
     subject: '',
@@ -49,6 +50,14 @@ const Timetable: React.FC = () => {
   useEffect(() => {
     const checkClassReminders = () => {
       const now = new Date();
+      const currentDate = now.toDateString();
+      
+      // Reset notifications if it's a new day
+      if (lastNotificationDate !== currentDate) {
+        setNotifiedClasses(new Set());
+        setLastNotificationDate(currentDate);
+      }
+      
       const currentDay = DAYS[now.getDay() === 0 ? 5 : now.getDay() - 1]; // Sunday = Saturday index
       const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
@@ -58,34 +67,42 @@ const Timetable: React.FC = () => {
       const ongoing = todayClasses.find(c => currentTime >= c.startTime && currentTime < c.endTime);
       setOngoingClass(ongoing || null);
 
-      // Check for upcoming classes (within next 15 minutes)
+      // Check for upcoming classes (5-10 minutes before start time)
       const upcoming = todayClasses.find(c => {
         const classStartMinutes = parseInt(c.startTime.split(':')[0]) * 60 + parseInt(c.startTime.split(':')[1]);
         const nowMinutes = now.getHours() * 60 + now.getMinutes();
         const diffMinutes = classStartMinutes - nowMinutes;
         
-        return diffMinutes > 0 && diffMinutes <= 15;
+        // Notify 5-10 minutes before class starts
+        return diffMinutes >= 5 && diffMinutes <= 10;
       });
 
       if (upcoming && !notifiedClasses.has(upcoming.id)) {
         setUpcomingClass(upcoming);
         
+        // Calculate minutes until class
+        const classStartMinutes = parseInt(upcoming.startTime.split(':')[0]) * 60 + parseInt(upcoming.startTime.split(':')[1]);
+        const nowMinutes = now.getHours() * 60 + now.getMinutes();
+        const minutesUntil = classStartMinutes - nowMinutes;
+        
         // Send notification to Firestore
         if (user && db) {
           addNotification(user.uid, {
             type: 'class_reminder',
-            message: `Class starting soon: ${upcoming.subject} at ${upcoming.startTime} in ${upcoming.location}`,
+            title: 'Class Starting Soon',
+            message: `${upcoming.subject} starts in ${minutesUntil} minutes at ${upcoming.startTime} in ${upcoming.location}`,
+            link: '/timetable',
             createdAt: new Date()
           }).catch(err => console.error('Failed to add notification:', err));
         }
 
         // Show browser notification if permission granted
         if ('Notification' in window && Notification.permission === 'granted') {
-          new Notification('Class Reminder', {
-            body: `${upcoming.subject} starts at ${upcoming.startTime} in ${upcoming.location}`,
-            icon: '/favicon.ico',
-            tag: upcoming.id
-          });
+                new Notification('📚 Class Reminder', {
+                  body: `${upcoming.subject} starts in ${minutesUntil} minutes\nTime: ${upcoming.startTime}\nLocation: ${upcoming.location}${upcoming.professor ? `\nProfessor: ${upcoming.professor}` : ''}`,
+                  tag: `class-${upcoming.id}`,
+                  requireInteraction: false
+                });
         }
 
         // Mark as notified
@@ -95,16 +112,17 @@ const Timetable: React.FC = () => {
       }
     };
 
-    // Request notification permission on mount
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission();
-    }
+          // Request notification permission on mount (only if not already requested)
+          if ('Notification' in window && Notification.permission === 'default') {
+            // Only request permission on user interaction, not automatically
+            // Permission will be requested when user interacts with timetable
+          }
 
     // Check immediately
     checkClassReminders();
 
-    // Check every minute
-    const interval = setInterval(checkClassReminders, 60000);
+    // Check every 30 seconds for more accurate timing (5-10 minute window)
+    const interval = setInterval(checkClassReminders, 30000);
 
     return () => clearInterval(interval);
   }, [classes, user, notifiedClasses]);

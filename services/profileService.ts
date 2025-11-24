@@ -2,7 +2,7 @@ import { doc, getDoc, updateDoc, setDoc, serverTimestamp } from 'firebase/firest
 import { updateProfile as firebaseUpdateProfile } from 'firebase/auth';
 import { db, auth } from '../firebaseConfig';
 import { User } from '../types';
-import { uploadAvatar as uploadToCloudinary } from './cloudinaryService';
+import { uploadAvatar as uploadToCloudinary, uploadBackgroundImage as uploadBgToCloudinary } from './cloudinaryService';
 
 // Get user profile
 export const getUserProfile = async (uid: string): Promise<User | null> => {
@@ -76,6 +76,22 @@ export const uploadAndUpdateAvatar = async (uid: string, file: File): Promise<st
 // Update avatar with existing URL
 export const updateAvatar = async (uid: string, avatarUrl: string): Promise<void> => {
   await updateUserProfile(uid, { photoURL: avatarUrl });
+};
+
+// Upload and update background image using Cloudinary
+export const uploadAndUpdateBackgroundImage = async (uid: string, file: File): Promise<string> => {
+  try {
+    // Upload to Cloudinary (free, no billing!)
+    const backgroundUrl = await uploadBgToCloudinary(uid, file);
+    
+    // Update user profile with new background URL
+    await updateUserProfile(uid, { backgroundImage: backgroundUrl });
+    
+    return backgroundUrl;
+  } catch (error) {
+    console.error('Error uploading background image:', error);
+    throw new Error('Failed to upload background image. Please try again.');
+  }
 };
 
 // Generate public profile link

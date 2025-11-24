@@ -24,6 +24,7 @@ interface Resource {
   department: string;
   year: string;
   subject: string;
+  moduleNumber?: string; // Module number (e.g., "Module 1", "Unit 3")
   uploadedBy: string;
   uploaderName: string;
   uploaderPhoto?: string;
@@ -41,6 +42,7 @@ const Resources: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDepartment, setSelectedDepartment] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
+  const [selectedModule, setSelectedModule] = useState('All');
   
   // Upload form state
   const [title, setTitle] = useState('');
@@ -48,7 +50,8 @@ const Resources: React.FC = () => {
   const [department, setDepartment] = useState('');
   const [year, setYear] = useState('');
   const [subject, setSubject] = useState('');
-  const [file, setFile] = useState<File | null>(null);
+  const [moduleNumber, setModuleNumber] = useState('');
+  const [files, setFiles] = useState<File[]>([]);
 
   const departments = [
     'All', 
@@ -75,6 +78,7 @@ const Resources: React.FC = () => {
   ];
 
   const years = ['All', '1st Year', '2nd Year', '3rd Year', '4th Year'];
+  const modules = ['All', 'Module 1', 'Module 2', 'Module 3', 'Module 4', 'Module 5'];
 
   // Fetch resources
   useEffect(() => {
@@ -107,7 +111,8 @@ const Resources: React.FC = () => {
         (r) =>
           r.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
           r.description.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          r.subject.toLowerCase().includes(searchQuery.toLowerCase())
+          r.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (r.moduleNumber && r.moduleNumber.toLowerCase().includes(searchQuery.toLowerCase()))
       );
     }
 
@@ -121,25 +126,38 @@ const Resources: React.FC = () => {
       filtered = filtered.filter((r) => r.year === selectedYear);
     }
 
+    // Filter by module number
+    if (selectedModule !== 'All') {
+      filtered = filtered.filter((r) => r.moduleNumber === selectedModule);
+    }
+
     setFilteredResources(filtered);
-  }, [searchQuery, selectedDepartment, selectedYear, resources]);
+  }, [searchQuery, selectedDepartment, selectedYear, selectedModule, resources]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const selectedFile = e.target.files[0];
-      if (selectedFile.type === 'application/pdf') {
-        setFile(selectedFile);
-      } else {
-        alert('Please select a PDF file');
+    if (e.target.files && e.target.files.length > 0) {
+      const selectedFiles = Array.from(e.target.files);
+      const pdfFiles = selectedFiles.filter(file => file.type === 'application/pdf');
+      
+      if (pdfFiles.length !== selectedFiles.length) {
+        alert('Some files were not PDFs and were skipped. Only PDF files are allowed.');
+      }
+      
+      if (pdfFiles.length > 0) {
+        setFiles(prev => [...prev, ...pdfFiles]);
       }
     }
+  };
+
+  const removeFile = (index: number) => {
+    setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!file || !title || !department || !year || !subject) {
-      alert('Please fill all required fields and select a PDF file');
+    if (files.length === 0 || !title || !department || !year || !subject) {
+      alert('Please fill all required fields and select at least one PDF file');
       return;
     }
 
@@ -162,67 +180,89 @@ const Resources: React.FC = () => {
         // Continue with default values
       }
 
-      // Upload file to Cloudinary as raw file (PDF)
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('upload_preset', 'uniconnect_uploads');
-      formData.append('folder', 'uniconnect/resources');
-      formData.append('resource_type', 'raw'); // Explicitly set resource type for PDFs
+      // Upload all files to Cloudinary
+      const uploadPromises = files.map(async (file) => {
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', 'uniconnect_uploads');
+        formData.append('folder', 'uniconnect/resources');
+        formData.append('resource_type', 'raw'); // Explicitly set resource type for PDFs
 
-      console.log('Uploading to Cloudinary...', {
-        fileName: file.name,
-        fileSize: file.size,
-        fileType: file.type
+        console.log('Uploading to Cloudinary...', {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type
+        });
+
+        const cloudinaryResponse = await fetch(
+          `https://api.cloudinary.com/v1_1/dlnlwudgr/raw/upload`,
+          {
+            method: 'POST',
+            body: formData,
+          }
+        );
+
+        if (!cloudinaryResponse.ok) {
+          let errorMessage = 'Failed to upload file';
+          try {
+            const errorData = await cloudinaryResponse.json();
+            console.error('Cloudinary upload error:', errorData);
+            errorMessage = errorData.error?.message || errorData.message || errorMessage;
+          } catch (parseError) {
+            const errorText = await cloudinaryResponse.text();
+            console.error('Cloudinary error response:', errorText);
+            errorMessage = `Upload failed: ${cloudinaryResponse.status} ${cloudinaryResponse.statusText}`;
+          }
+          throw new Error(`${file.name}: ${errorMessage}`);
+        }
+
+        const cloudinaryData = await cloudinaryResponse.json();
+        
+        if (!cloudinaryData.secure_url) {
+          throw new Error(`${file.name}: Upload succeeded but no URL returned`);
+        }
+
+        console.log('Cloudinary upload successful:', cloudinaryData.secure_url);
+
+        return {
+          fileUrl: cloudinaryData.secure_url,
+          fileName: file.name,
+          fileSize: file.size
+        };
       });
 
-      const cloudinaryResponse = await fetch(
-        `https://api.cloudinary.com/v1_1/dlnlwudgr/raw/upload`,
-        {
-          method: 'POST',
-          body: formData,
-        }
-      );
+      // Wait for all uploads to complete
+      const uploadResults = await Promise.all(uploadPromises);
 
-      if (!cloudinaryResponse.ok) {
-        let errorMessage = 'Failed to upload file';
-        try {
-          const errorData = await cloudinaryResponse.json();
-          console.error('Cloudinary upload error:', errorData);
-          errorMessage = errorData.error?.message || errorData.message || errorMessage;
-        } catch (parseError) {
-          const errorText = await cloudinaryResponse.text();
-          console.error('Cloudinary error response:', errorText);
-          errorMessage = `Upload failed: ${cloudinaryResponse.status} ${cloudinaryResponse.statusText}`;
-        }
-        throw new Error(errorMessage);
-      }
+      // If multiple files, create a resource for each file
+      // If single file, create one resource
+      const uploadResourcePromises = uploadResults.map((result, index) => {
+        // For multiple files, append file number to title if more than one
+        const resourceTitle = files.length > 1 
+          ? `${title} (${result.fileName})` 
+          : title;
 
-      const cloudinaryData = await cloudinaryResponse.json();
-      
-      if (!cloudinaryData.secure_url) {
-        throw new Error('Upload succeeded but no URL returned');
-      }
-
-      console.log('Cloudinary upload successful:', cloudinaryData.secure_url);
-
-      // Save resource metadata to Firestore
-      const docRef = await addDoc(collection(db, 'resources'), {
-        title,
-        description,
-        fileUrl: cloudinaryData.secure_url,
-        fileName: file.name,
-        fileSize: file.size,
-        department,
-        year,
-        subject,
-        uploadedBy: user.uid,
-        uploaderName: userData?.displayName || user.displayName || 'Anonymous',
-        uploaderPhoto: userData?.photoURL || user.photoURL || '',
-        createdAt: serverTimestamp(),
-        downloads: 0,
+        return addDoc(collection(db, 'resources'), {
+          title: resourceTitle,
+          description,
+          fileUrl: result.fileUrl,
+          fileName: result.fileName,
+          fileSize: result.fileSize,
+          department,
+          year,
+          subject,
+          moduleNumber: moduleNumber || undefined,
+          uploadedBy: user.uid,
+          uploaderName: userData?.displayName || user.displayName || 'Anonymous',
+          uploaderPhoto: userData?.photoURL || user.photoURL || '',
+          createdAt: serverTimestamp(),
+          downloads: 0,
+        });
       });
+
+      await Promise.all(uploadResourcePromises);
       
-      console.log('Resource saved to Firestore with ID:', docRef.id);
+      console.log('All resources saved to Firestore');
 
       // Reset form
       setTitle('');
@@ -230,9 +270,10 @@ const Resources: React.FC = () => {
       setDepartment('');
       setYear('');
       setSubject('');
-      setFile(null);
+      setModuleNumber('');
+      setFiles([]);
       setShowUploadModal(false);
-      alert('Resource uploaded successfully! 🎉');
+      alert(`Successfully uploaded ${files.length} resource(s)! 🎉`);
     } catch (error: any) {
       console.error('Error uploading resource:', error);
       const errorMessage = error.message || 'Failed to upload resource. Please try again.';
@@ -274,7 +315,7 @@ const Resources: React.FC = () => {
               <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search resources, subjects..."
+                placeholder="Search resources, subjects, module numbers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -307,6 +348,19 @@ const Resources: React.FC = () => {
               ))}
             </select>
 
+            {/* Module Number Filter */}
+            <select
+              value={selectedModule}
+              onChange={(e) => setSelectedModule(e.target.value)}
+              className="px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+            >
+              {modules.map((mod) => (
+                <option key={mod} value={mod}>
+                  {mod}
+                </option>
+              ))}
+            </select>
+
             {/* Upload Button */}
             <button
               onClick={() => setShowUploadModal(true)}
@@ -318,7 +372,7 @@ const Resources: React.FC = () => {
           </div>
 
           {/* Active Filters */}
-          {(selectedDepartment !== 'All' || selectedYear !== 'All') && (
+          {(selectedDepartment !== 'All' || selectedYear !== 'All' || selectedModule !== 'All') && (
             <div className="flex gap-2 mt-3 flex-wrap">
               {selectedDepartment !== 'All' && (
                 <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm flex items-center gap-2">
@@ -332,6 +386,14 @@ const Resources: React.FC = () => {
                 <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm flex items-center gap-2">
                   {selectedYear}
                   <button onClick={() => setSelectedYear('All')}>
+                    <X size={14} />
+                  </button>
+                </span>
+              )}
+              {selectedModule !== 'All' && (
+                <span className="bg-primary/10 text-primary px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                  {selectedModule}
+                  <button onClick={() => setSelectedModule('All')}>
                     <X size={14} />
                   </button>
                 </span>
@@ -383,6 +445,11 @@ const Resources: React.FC = () => {
                   <span className="bg-purple-50 text-purple-600 px-2 py-1 rounded text-xs font-medium">
                     {resource.subject}
                   </span>
+                  {resource.moduleNumber && (
+                    <span className="bg-orange-50 text-orange-600 px-2 py-1 rounded text-xs font-medium">
+                      {resource.moduleNumber}
+                    </span>
+                  )}
                 </div>
 
                 {/* Meta Info */}
@@ -535,10 +602,29 @@ const Resources: React.FC = () => {
                 />
               </div>
 
-              {/* File Upload */}
+              {/* Module Number */}
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
-                  PDF File *
+                  Module Number (Optional)
+                </label>
+                <select
+                  value={moduleNumber}
+                  onChange={(e) => setModuleNumber(e.target.value)}
+                  className="w-full px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                >
+                  <option value="">Select Module (Optional)</option>
+                  <option value="Module 1">Module 1</option>
+                  <option value="Module 2">Module 2</option>
+                  <option value="Module 3">Module 3</option>
+                  <option value="Module 4">Module 4</option>
+                  <option value="Module 5">Module 5</option>
+                </select>
+              </div>
+
+              {/* File Upload - Multiple Files */}
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  PDF Files * (You can select multiple files)
                 </label>
                 <div className="border-2 border-dashed border-slate-200 rounded-lg p-6 text-center hover:border-primary transition-colors">
                   <input
@@ -547,6 +633,7 @@ const Resources: React.FC = () => {
                     onChange={handleFileChange}
                     className="hidden"
                     id="file-upload"
+                    multiple
                     required
                   />
                   <label
@@ -555,15 +642,43 @@ const Resources: React.FC = () => {
                   >
                     <Upload size={32} className="text-slate-400 mb-2" />
                     <span className="text-sm text-slate-600 font-medium">
-                      {file ? file.name : 'Click to upload PDF'}
+                      {files.length > 0 
+                        ? `${files.length} file(s) selected` 
+                        : 'Click to upload PDF(s)'}
                     </span>
-                    {file && (
-                      <span className="text-xs text-slate-500 mt-1">
-                        {formatFileSize(file.size)}
-                      </span>
-                    )}
+                    <span className="text-xs text-slate-500 mt-1">
+                      You can select multiple PDF files at once
+                    </span>
                   </label>
                 </div>
+                
+                {/* Selected Files List */}
+                {files.length > 0 && (
+                  <div className="mt-3 space-y-2">
+                    {files.map((file, index) => (
+                      <div
+                        key={index}
+                        className="flex items-center justify-between bg-slate-50 p-3 rounded-lg border border-slate-200"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-700 truncate">
+                            {file.name}
+                          </p>
+                          <p className="text-xs text-slate-500">
+                            {formatFileSize(file.size)}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removeFile(index)}
+                          className="ml-2 p-1 text-red-500 hover:text-red-700 hover:bg-red-50 rounded"
+                        >
+                          <X size={18} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               {/* Submit */}
