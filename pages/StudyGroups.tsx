@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search, Smile, FileText, BarChart3, Video, File } from 'lucide-react';
+import { Send, Bot, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search, Smile, FileText, BarChart3, Video, File, Hash, MapPin } from 'lucide-react';
 import { StudyGroup, ChatMessage } from '../types';
 import Header from '../components/Header';
 import { generateStudyHelp } from '../services/geminiService';
@@ -29,8 +29,11 @@ const StudyGroups: React.FC = () => {
   const [showPollCreator, setShowPollCreator] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
-  const [documentFile, setDocumentFile] = useState<File | null>(null);
-  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
+  const [location, setLocation] = useState<{name: string; latitude?: number; longitude?: number} | null>(null);
+  const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<{name: string; type: string} | null>(null);
   const plusMenuRef = useRef<HTMLDivElement>(null);
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const gifPickerRef = useRef<HTMLDivElement>(null);
@@ -55,20 +58,18 @@ const StudyGroups: React.FC = () => {
 
   // Debug: Log when files change to verify send button state
   useEffect(() => {
-    const hasContent = messageText.trim() || imageFile || videoFile || documentFile || selectedGif || (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2);
+    const hasContent = messageText.trim() || imageFile || attachmentFile || selectedGif || (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2);
     const isDisabled = uploading || !selectedGroup || !user || !hasContent;
     
     // Only log when files are actually selected to reduce spam
-    if (imageFile || videoFile || documentFile || selectedGif) {
+    if (imageFile || attachmentFile || selectedGif) {
       console.log('🔍 Send button state check (FILE SELECTED):', {
         hasContent: !!hasContent,
         isDisabled,
         imageFile: !!imageFile,
         imageFileName: imageFile?.name,
-        videoFile: !!videoFile,
-        videoFileName: videoFile?.name,
-        documentFile: !!documentFile,
-        documentFileName: documentFile?.name,
+        attachmentFile: !!attachmentFile,
+        attachmentFileName: attachmentFile?.name,
         selectedGif: !!selectedGif,
         messageText: messageText.trim(),
         uploading,
@@ -76,7 +77,7 @@ const StudyGroups: React.FC = () => {
         user: !!user
       });
     }
-  }, [imageFile, videoFile, documentFile, selectedGif, messageText, uploading, selectedGroup, user, showPollCreator, pollQuestion, pollOptions]);
+  }, [imageFile, attachmentFile, selectedGif, messageText, uploading, selectedGroup, user, showPollCreator, pollQuestion, pollOptions]);
 
   const loadGroups = async () => {
     setLoading(true);
@@ -222,14 +223,14 @@ const StudyGroups: React.FC = () => {
                         senderId: data.senderId || '',
                         senderName: data.senderName || 'Unknown',
                         imageUrl: data.imageUrl || null,
-                        videoUrl: data.videoUrl || null,
-                        documentUrl: data.documentUrl || null,
-                        documentName: data.documentName || null,
                         stickerUrl: data.stickerUrl || null,
                         poll: data.poll || null,
                         timestamp: data.timestamp ? data.timestamp.toDate() : new Date(),
-                        isAi: data.isAi || false
-                    } as ChatMessage;
+                        isAi: data.isAi || false,
+                        tags: data.tags || null,
+                        location: data.location || null,
+                        attachments: data.attachments || null
+                    } as ChatMessage & { tags?: string[]; location?: any; attachments?: any[] };
                     return msg;
                 });
                 // Sort messages by timestamp
@@ -525,62 +526,76 @@ const StudyGroups: React.FC = () => {
 
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (files && files.length > 0) {
-      // For now, handle only the first file (can extend to multiple later)
-      const file = files[0];
-      console.log('📷 Image selected:', file.name, file.size, 'bytes', file.type);
+    const file = e.target.files?.[0];
+    if (file) {
       setImageFile(file);
-      setVideoFile(null);
-      setDocumentFile(null);
       setSelectedGif(null);
+      setAttachmentFile(null);
+      setAttachmentPreview(null);
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
-        console.log('✅ Image preview ready, send button should be enabled');
       };
       reader.readAsDataURL(file);
-    } else {
-      console.log('⚠️ No image file selected');
     }
-    // Reset input to allow selecting same file again
     e.target.value = '';
   };
 
-  const handleVideoSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      console.log('🎥 Video selected:', file.name, file.size, 'bytes', file.type);
-      setVideoFile(file);
-      setImageFile(null);
-      setDocumentFile(null);
-      setImagePreview('');
-      setSelectedGif(null);
-      console.log('✅ Video file set, send button should be enabled');
-    } else {
-      console.log('⚠️ No video file selected');
+  // Handle tag input
+  const handleTagInput = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && tagInput.trim()) {
+      const newTag = tagInput.trim().replace('#', '');
+      if (!tags.includes(newTag) && tags.length < 5) {
+        setTags([...tags, newTag]);
+        setTagInput('');
+      }
     }
-    setShowPlusMenu(false);
-    // Reset input to allow selecting same file again
-    e.target.value = '';
   };
 
-  const handleDocumentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Handle location
+  const handleGetLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          try {
+            const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`);
+            const data = await response.json();
+            setLocation({
+              name: data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+              latitude,
+              longitude
+            });
+          } catch (error) {
+            setLocation({
+              name: `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`,
+              latitude,
+              longitude
+            });
+          }
+        },
+        (error) => {
+          alert('Could not get location. Please enter manually.');
+        }
+      );
+    } else {
+      alert('Geolocation is not supported by your browser.');
+    }
+  };
+
+  // Handle attachment
+  const handleAttachmentSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      console.log('📄 Document selected:', file.name, file.size, 'bytes', file.type);
-      setDocumentFile(file);
+      setAttachmentFile(file);
+      setAttachmentPreview({
+        name: file.name,
+        type: file.type.split('/')[0] || 'file'
+      });
       setImageFile(null);
-      setVideoFile(null);
       setImagePreview('');
       setSelectedGif(null);
-      console.log('✅ Document file set');
-      console.log('✅ Send button should now be ENABLED - documentFile is set:', !!file);
-    } else {
-      console.log('⚠️ No document file selected');
     }
-    setShowPlusMenu(false);
-    // Reset input to allow selecting same file again
     e.target.value = '';
   };
 
@@ -694,29 +709,11 @@ const StudyGroups: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    // Allow sending if there's text, image, video, document, GIF, or poll
-    const hasContent = messageText.trim() || imageFile || videoFile || documentFile || selectedGif || (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2);
-    
-    console.log('🔵 handleSendMessage called:', {
-      hasContent,
-      messageText: messageText.trim(),
-      imageFile: !!imageFile,
-      imageFileName: imageFile?.name,
-      videoFile: !!videoFile,
-      videoFileName: videoFile?.name,
-      documentFile: !!documentFile,
-      documentFileName: documentFile?.name,
-      selectedGif: !!selectedGif,
-      selectedGroup: !!selectedGroup,
-      selectedGroupId: selectedGroup?.id,
-      user: !!user,
-      userId: user?.uid,
-      uploading: uploading
-    });
+    // Allow sending if there's text, image, attachment, GIF, or poll
+    const hasContent = messageText.trim() || imageFile || attachmentFile || selectedGif || (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2);
     
     if (!hasContent) {
-      console.warn('❌ Cannot send: No content (text, image, video, document, GIF, or poll)');
-      alert('Please add content to send (text, image, video, document, or sticker)');
+      alert('Please add content to send (text, image, attachment, GIF, or poll)');
       return;
     }
     
@@ -740,9 +737,12 @@ const StudyGroups: React.FC = () => {
     const text = messageText;
     // Store file references before clearing state
     const currentImageFile = imageFile;
-    const currentVideoFile = videoFile;
-    const currentDocumentFile = documentFile;
+    const currentAttachmentFile = attachmentFile;
     const currentSelectedGif = selectedGif;
+    const currentTags = tags;
+    const currentLocation = location;
+    const currentPollQuestion = pollQuestion;
+    const currentPollOptions = pollOptions;
     
     // Clear state AFTER storing references
     setMessageText('');
@@ -750,9 +750,9 @@ const StudyGroups: React.FC = () => {
 
     try {
         let imageUrl = '';
-        let videoUrl = '';
-        let documentUrl = '';
-        let documentName = '';
+        let attachmentUrl = '';
+        let attachmentName = '';
+        let attachmentType = '';
         let stickerUrl = '';
         let poll = null;
         
@@ -826,118 +826,36 @@ const StudyGroups: React.FC = () => {
           }
         }
 
-        // Upload video if present
-        if (currentVideoFile) {
+        // Upload attachment if present
+        if (currentAttachmentFile) {
           try {
-            console.log('📤 Uploading video:', currentVideoFile.name, currentVideoFile.size, 'bytes');
-            const formData = new FormData();
-            formData.append('file', currentVideoFile);
-            formData.append('upload_preset', 'uniconnect_uploads');
-            formData.append('folder', `uniconnect/groups/${selectedGroup.id}/videos`);
-            
-            const response = await fetch(`https://api.cloudinary.com/v1_1/dlnlwudgr/video/upload`, {
-              method: 'POST',
-              body: formData,
-            });
-            
-            const responseData = await response.json().catch(async () => {
-              const text = await response.text().catch(() => 'Unknown error');
-              return { error: { message: text } };
-            });
-            
-            if (response.ok) {
-              videoUrl = responseData.secure_url;
-              console.log('✅ Video uploaded successfully:', videoUrl);
-            } else {
-              console.error('❌ Video upload error:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: responseData
-              });
-              
-              let errorMsg = `Video upload failed (${response.status})`;
-              if (responseData.error?.message) {
-                errorMsg = responseData.error.message;
-              } else if (response.status === 400) {
-                errorMsg = `❌ Cloudinary 400 Error!\n\nYour upload preset 'uniconnect_uploads' is either:\n1. Set to "Signed" (MUST be "Unsigned")\n2. Doesn't exist\n3. Not configured correctly\n\n🔧 FIX:\n1. Go to: https://cloudinary.com/console/settings/upload\n2. Edit preset: uniconnect_uploads\n3. General tab → Signing Mode → Change to "Unsigned"\n4. Optimize and Deliver tab → Access control → Set to "Public"\n5. Click "Save"`;
-              } else if (response.status === 401) {
-                errorMsg = 'Cloudinary authentication failed. Check upload preset is set to "Unsigned".';
-              } else if (response.status === 403) {
-                errorMsg = 'Access denied. Check Cloudinary preset "Access control" is set to "Public".';
-              } else if (response.status === 413) {
-                errorMsg = 'Video file too large. Maximum size is 10MB for free tier.';
-              }
-              
-              throw new Error(errorMsg);
-            }
-            setVideoFile(null);
+            const postId = `temp_${Date.now()}`;
+            const uploaded = await uploadImageToCloudinary(currentAttachmentFile, `uniconnect/groups/${selectedGroup.id}/attachments/${postId}`);
+            attachmentUrl = uploaded;
+            attachmentName = currentAttachmentFile.name;
+            attachmentType = currentAttachmentFile.type.split('/')[0] || 'file';
+            setAttachmentFile(null);
+            setAttachmentPreview(null);
           } catch (error: any) {
-            console.error('❌ Video upload error:', error);
-            setUploading(false);
-            throw new Error(error.message || 'Failed to upload video. Please try again.');
-          }
-        }
-
-        // Upload document if present
-        if (currentDocumentFile) {
-          try {
-            console.log('📤 Uploading document:', currentDocumentFile.name, currentDocumentFile.size, 'bytes');
-            const formData = new FormData();
-            formData.append('file', currentDocumentFile);
-            formData.append('upload_preset', 'uniconnect_uploads');
-            formData.append('folder', `uniconnect/groups/${selectedGroup.id}/documents`);
-            
-            const response = await fetch(`https://api.cloudinary.com/v1_1/dlnlwudgr/raw/upload`, {
-              method: 'POST',
-              body: formData,
-            });
-            
-            const responseData = await response.json().catch(async () => {
-              const text = await response.text().catch(() => 'Unknown error');
-              return { error: { message: text } };
-            });
-            
-            if (response.ok) {
-              documentUrl = responseData.secure_url;
-              documentName = currentDocumentFile.name;
-              console.log('✅ Document uploaded successfully:', documentUrl);
-            } else {
-              console.error('❌ Document upload error:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: responseData
-              });
-              
-              let errorMsg = `Document upload failed (${response.status})`;
-              if (responseData.error?.message) {
-                errorMsg = responseData.error.message;
-              } else if (response.status === 400) {
-                errorMsg = `❌ Cloudinary 400 Error!\n\nYour upload preset 'uniconnect_uploads' is either:\n1. Set to "Signed" (MUST be "Unsigned")\n2. Doesn't exist\n3. Not configured correctly\n\n🔧 FIX:\n1. Go to: https://cloudinary.com/console/settings/upload\n2. Edit preset: uniconnect_uploads\n3. General tab → Signing Mode → Change to "Unsigned"\n4. Optimize and Deliver tab → Access control → Set to "Public"\n5. Click "Save"`;
-              } else if (response.status === 401) {
-                errorMsg = 'Cloudinary authentication failed. Check upload preset is set to "Unsigned".';
-              } else if (response.status === 403) {
-                errorMsg = 'Access denied. Check Cloudinary preset "Access control" is set to "Public".';
-              } else if (response.status === 413) {
-                errorMsg = 'Document file too large. Maximum size is 10MB for free tier.';
-              }
-              
-              throw new Error(errorMsg);
-            }
-            setDocumentFile(null);
-          } catch (error: any) {
-            console.error('❌ Document upload error:', error);
-            setUploading(false);
-            throw new Error(error.message || 'Failed to upload document. Please try again.');
+            console.error('Attachment upload error:', error);
+            throw new Error(error.message || 'Failed to upload attachment. Please try again.');
           }
         }
 
         // Handle poll if created
-        if (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2) {
+        if (currentPollQuestion && currentPollOptions.filter(o => o.trim()).length >= 2) {
+          const validOptions = currentPollOptions.filter(o => o.trim());
+          const initialVotes: {[key: string]: number} = {};
+          const initialUserVotes: {[key: string]: string[]} = {};
+          validOptions.forEach((_, index) => {
+            initialVotes[index.toString()] = 0;
+            initialUserVotes[index.toString()] = [];
+          });
           poll = {
-            question: pollQuestion,
-            options: pollOptions.filter(o => o.trim()),
-            votes: {},
-            userVotes: {}
+            question: currentPollQuestion,
+            options: validOptions,
+            votes: initialVotes,
+            userVotes: initialUserVotes
           };
           setShowPollCreator(false);
           setPollQuestion('');
@@ -946,36 +864,46 @@ const StudyGroups: React.FC = () => {
 
         if (!db) throw new Error("DB unavailable");
 
-        // Only send message if there's actual content (text, image, video, document, sticker, or poll)
-        if (text.trim() || imageUrl || videoUrl || documentUrl || stickerUrl || poll) {
-          console.log('Saving message to Firestore:', {
-            hasText: !!text.trim(),
-            hasImage: !!imageUrl,
-            hasVideo: !!videoUrl,
-            hasDocument: !!documentUrl,
-            hasSticker: !!stickerUrl,
-            hasPoll: !!poll
-          });
-          
+        // Only send message if there's actual content
+        if (text.trim() || imageUrl || attachmentUrl || stickerUrl || poll) {
           // Add message to Firestore
-        await addDoc(collection(db, "groups", selectedGroup.id, "messages"), {
+          const messageData: any = {
             text: text || '',
-            imageUrl: imageUrl || null,
-            videoUrl: videoUrl || null,
-            documentUrl: documentUrl || null,
-            documentName: documentName || null,
-            stickerUrl: stickerUrl || null,
-            poll: poll || null,
             senderId: user.uid,
             senderName: user.displayName || 'User',
             timestamp: serverTimestamp(),
             isAi: false
-        });
+          };
+          
+          if (imageUrl) messageData.imageUrl = imageUrl;
+          if (stickerUrl) messageData.stickerUrl = stickerUrl;
+          if (poll) messageData.poll = poll;
+          if (currentTags.length > 0) messageData.tags = currentTags;
+          if (currentLocation) messageData.location = currentLocation;
+          if (attachmentUrl) {
+            messageData.attachments = [{
+              name: attachmentName,
+              url: attachmentUrl,
+              type: attachmentType
+            }];
+          }
+          
+          await addDoc(collection(db, "groups", selectedGroup.id, "messages"), messageData);
+          
+          // Clear all state after successful send
+          setImageFile(null);
+          setImagePreview('');
+          setSelectedGif(null);
+          setTags([]);
+          setTagInput('');
+          setLocation(null);
+          setAttachmentFile(null);
+          setAttachmentPreview(null);
+          setShowEmojiPicker(false);
+          setShowGifPicker(false);
 
-          console.log('Message saved successfully to Firestore');
         } else {
-          console.warn('No content to send - skipping message creation');
-          alert('No content to send. Please add text, image, video, document, sticker, or poll.');
+          alert('No content to send. Please add text, image, attachment, sticker, or poll.');
         }
 
         // Check for AI invocation
@@ -1336,29 +1264,24 @@ const StudyGroups: React.FC = () => {
                     onClick={() => window.open(msg.imageUrl, '_blank')}
                   />
                 )}
-                {msg.videoUrl && (
-                  <div className="mb-2">
-                    <video 
-                      src={msg.videoUrl} 
-                      controls
-                      className="max-w-[250px] rounded-lg"
-                    />
-                  </div>
-                )}
-                {msg.documentUrl && (
-                  <div className="mb-2 p-3 bg-slate-100 rounded-lg flex items-center gap-2">
-                    <FileText size={20} className="text-primary" />
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-slate-700">{msg.documentName || 'Document'}</p>
-                      <a 
-                        href={msg.documentUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="text-xs text-primary hover:underline"
-                      >
-                        Download
-                      </a>
-                    </div>
+                {(msg as any).attachments && (msg as any).attachments.length > 0 && (
+                  <div className="mb-2 space-y-2">
+                    {(msg as any).attachments.map((att: any, idx: number) => (
+                      <div key={idx} className="p-3 bg-slate-100 rounded-lg flex items-center gap-2">
+                        <FileText size={20} className="text-primary" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-slate-700">{att.name || 'Attachment'}</p>
+                          <a 
+                            href={att.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer"
+                            className="text-xs text-primary hover:underline"
+                          >
+                            Download
+                          </a>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
                 {msg.stickerUrl && (
@@ -1412,6 +1335,25 @@ const StudyGroups: React.FC = () => {
                 )}
                 
                 {msg.text && <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
+                
+                {/* Tags */}
+                {(msg as any).tags && (msg as any).tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {(msg as any).tags.map((tag: string, idx: number) => (
+                      <span key={idx} className="inline-block px-2 py-0.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium">
+                        #{tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+                
+                {/* Location */}
+                {(msg as any).location && (
+                  <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">
+                    <MapPin size={12} />
+                    <span>{(msg as any).location.name}</span>
+                  </div>
+                )}
                 
                 <span className={`text-[10px] block text-right mt-1 ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
                     {(() => {
@@ -1467,13 +1409,21 @@ const StudyGroups: React.FC = () => {
 
       {/* Input Area */}
       <div className="p-3 md:p-4 bg-white border-t border-slate-200">
+        <textarea
+          value={messageText}
+          onChange={(e) => setMessageText(e.target.value)}
+          placeholder="Type a message..."
+          className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+          rows={3}
+        />
+
         {/* Poll Creator */}
         {showPollCreator && (
-          <div className="mb-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-            <div className="flex items-center justify-between mb-3">
+          <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+            <div className="flex items-center justify-between mb-2">
               <h4 className="font-semibold text-sm text-slate-700">Create Poll</h4>
               <button onClick={() => setShowPollCreator(false)} className="text-slate-400 hover:text-slate-600">
-                <X size={18} />
+                <X size={16} />
               </button>
             </div>
             <input
@@ -1481,372 +1431,297 @@ const StudyGroups: React.FC = () => {
               placeholder="Poll question..."
               value={pollQuestion}
               onChange={(e) => setPollQuestion(e.target.value)}
-              className="w-full px-3 py-2 mb-3 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full px-3 py-2 mb-2 bg-white rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
             />
-            {pollOptions.map((option, index) => (
-              <div key={index} className="flex gap-2 mb-2">
-                <input
-                  type="text"
-                  placeholder={`Option ${index + 1}`}
-                  value={option}
-                  onChange={(e) => {
-                    const newOptions = [...pollOptions];
-                    newOptions[index] = e.target.value;
-                    setPollOptions(newOptions);
-                  }}
-                  className="flex-1 px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                {pollOptions.length > 2 && (
-                  <button onClick={() => removePollOption(index)} className="p-2 text-red-500 hover:bg-red-50 rounded">
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-            ))}
+            <div className="space-y-2">
+              {pollOptions.map((option, index) => (
+                <div key={index} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder={`Option ${index + 1}`}
+                    value={option}
+                    onChange={(e) => {
+                      const newOptions = [...pollOptions];
+                      newOptions[index] = e.target.value;
+                      setPollOptions(newOptions);
+                    }}
+                    className="flex-1 px-3 py-2 bg-white rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  {pollOptions.length > 2 && (
+                    <button
+                      onClick={() => removePollOption(index)}
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                    >
+                      <X size={16} />
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
             {pollOptions.length < 4 && (
-              <button onClick={addPollOption} className="text-sm text-primary hover:underline">
+              <button onClick={addPollOption} className="text-sm text-primary hover:underline mt-2">
                 + Add Option
               </button>
             )}
           </div>
         )}
 
-        <div className="flex items-center gap-2 bg-slate-50 p-2 rounded-full border border-slate-200 focus-within:ring-2 focus-within:ring-indigo-500/20 focus-within:border-indigo-500 transition-all">
-          {/* Plus Button with Menu */}
-          <div className="relative" ref={plusMenuRef}>
-            <button
-              onClick={() => {
-                setShowPlusMenu(!showPlusMenu);
-                setShowEmojiPicker(false);
-              }}
-              className="p-2 text-slate-400 hover:text-primary cursor-pointer transition-colors"
-            >
-              <Plus size={20} />
-            </button>
-            {showPlusMenu && (
-              <div className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-200 p-2 z-50 min-w-[180px]">
-                <button
-                  onClick={() => {
-                    document.getElementById('photo-upload')?.click();
-                    setShowPlusMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
+        <div className="flex justify-between items-center border-t border-slate-100 pt-3 mt-3">
+          <div className="flex gap-1 md:gap-2 flex-wrap">
+            {/* Emoji Picker */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowEmojiPicker(!showEmojiPicker);
+                  setShowGifPicker(false);
+                }}
+                className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors"
+                title="Add Emoji"
+              >
+                <Smile size={20} />
+              </button>
+              {showEmojiPicker && (
+                <div
+                  ref={emojiPickerRef}
+                  className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
+                  style={{ width: '280px' }}
                 >
-                  <ImageIcon size={18} />
-                  Photos
-                </button>
-                <input
-                  type="file"
-                  id="photo-upload"
-                  accept="image/*"
-                  onChange={handleImageSelect}
-                  className="hidden"
-                  multiple
-                />
-                <button
-                  onClick={() => {
-                    document.getElementById('video-upload')?.click();
-                    setShowPlusMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
-                >
-                  <Video size={18} />
-                  Videos
-                </button>
-                <input
-                  type="file"
-                  id="video-upload"
-                  accept="video/*"
-                  onChange={handleVideoSelect}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => {
-                    document.getElementById('document-upload')?.click();
-                    setShowPlusMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
-                >
-                  <File size={18} />
-                  Documents
-                </button>
-                <input
-                  type="file"
-                  id="document-upload"
-                  accept=".pdf,.doc,.docx,.txt"
-                  onChange={handleDocumentSelect}
-                  className="hidden"
-                />
-                <button
-                  onClick={() => {
-                    setShowPollCreator(true);
-                    setShowPlusMenu(false);
-                  }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
-                >
-                  <BarChart3 size={18} />
-                  Poll
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowGifPicker(true);
-                    setShowPlusMenu(false);
-                    setShowEmojiPicker(false);
-                    setGifSearchTerm('');
-                    searchGifs('trending');
-                  }}
-                  className="w-full text-left px-3 py-2 hover:bg-slate-50 rounded flex items-center gap-2 text-sm text-slate-700"
-                >
-                  <Smile size={18} />
-                  Sticker (GIF)
-                </button>
-              </div>
-            )}
-          </div>
+                  <div className="grid grid-cols-5 gap-2">
+                    {emojis.map((emoji, index) => (
+                      <button
+                        key={index}
+                        onClick={() => {
+                          setMessageText(prev => prev + emoji);
+                          setShowEmojiPicker(false);
+                        }}
+                        className="text-2xl hover:bg-slate-50 rounded-lg p-2 transition-colors"
+                      >
+                        {emoji}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
 
-          {/* GIF/Sticker Picker - Positioned near Plus button */}
-          {showGifPicker && (
-            <div 
-              ref={gifPickerRef}
-              className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-200 p-3 z-50"
-              style={{ width: '320px', maxHeight: '400px' }}
-            >
-                <input
-                  type="text"
-                  placeholder="Search GIFs..."
-                  value={gifSearchTerm}
-                  onChange={(e) => {
-                    setGifSearchTerm(e.target.value);
-                    if (e.target.value.trim()) {
+            {/* GIF Picker */}
+            <div className="relative">
+              <button
+                onClick={() => {
+                  setShowGifPicker(!showGifPicker);
+                  setShowEmojiPicker(false);
+                  if (!showGifPicker) {
+                    searchGifs('trending');
+                  }
+                }}
+                className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors"
+                title="Add GIF"
+              >
+                <ImageIcon size={20} />
+              </button>
+              {showGifPicker && (
+                <div
+                  ref={gifPickerRef}
+                  className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
+                  style={{ width: '320px', maxHeight: '400px' }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search GIFs..."
+                    value={gifSearchTerm}
+                    onChange={(e) => {
+                      setGifSearchTerm(e.target.value);
                       searchGifs(e.target.value);
-                    } else {
-                      searchGifs('trending');
-                    }
-                  }}
-                  className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                />
-                <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-                  {gifResults.length > 0 ? (
-                    gifResults.map((gif: any) => (
+                    }}
+                    className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                    {gifResults.map((gif: any) => (
                       <button
                         key={gif.id}
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
+                        onClick={() => {
                           setSelectedGif(gif.images.fixed_height.url);
                           setShowGifPicker(false);
-                          setGifSearchTerm('');
                         }}
                         className="hover:opacity-80 transition-opacity"
                       >
                         <img
                           src={gif.images.fixed_height_small.url}
-                          alt={gif.title || 'GIF'}
+                          alt={gif.title}
                           className="w-full rounded-lg"
                         />
                       </button>
-                    ))
-                  ) : (
-                    <p className="text-sm text-slate-500 text-center py-4 col-span-2">Loading GIFs...</p>
-                  )}
+                    ))}
+                  </div>
                 </div>
-              </div>
-          )}
+              )}
+            </div>
 
-          {/* Emoji Button */}
-          <div className="relative">
+            {/* Poll Creator */}
             <button
-              type="button"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                setShowEmojiPicker(!showEmojiPicker);
-                setShowPlusMenu(false);
+              onClick={() => {
+                setShowPollCreator(!showPollCreator);
+                setShowEmojiPicker(false);
                 setShowGifPicker(false);
               }}
-              className="p-2 text-slate-400 hover:text-primary cursor-pointer transition-colors"
+              className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
+                showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
+              }`}
+              title="Create Poll"
             >
-              <Smile size={20} />
+              <BarChart3 size={20} />
             </button>
-            {/* Emoji Picker - Positioned relative to emoji button */}
-            {showEmojiPicker && (
-              <div 
-                ref={emojiPickerRef}
-                className="absolute bottom-full left-0 mb-2 bg-white rounded-lg shadow-lg border border-slate-200 p-3 z-50 max-h-64 overflow-y-auto"
-                style={{ width: '280px' }}
-              >
-                <div className="grid grid-cols-8 gap-1">
-                  {emojis.map((emoji, index) => (
-                    <button
-                      key={index}
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setMessageText(prev => prev + emoji);
-                        setShowEmojiPicker(false);
-                      }}
-                      className="text-xl hover:bg-slate-50 rounded-lg p-1.5 transition-colors cursor-pointer"
-                    >
-                      {emoji}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
 
-          <input
-            type="text"
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !uploading && handleSendMessage()}
-            placeholder="Type a message..."
-            className="flex-1 bg-transparent border-none outline-none px-3 text-sm text-slate-800 placeholder:text-slate-400"
-          />
+            {/* Tag Input */}
+            <button
+              onClick={() => {
+                const input = document.getElementById('tag-input') as HTMLInputElement;
+                if (input) {
+                  input.style.display = input.style.display === 'none' ? 'block' : 'none';
+                  if (input.style.display !== 'none') input.focus();
+                }
+              }}
+              className="p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors"
+              title="Add Tags"
+            >
+              <Hash size={20} />
+            </button>
+
+            {/* Location */}
+            <button
+              onClick={handleGetLocation}
+              className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
+                location ? 'text-primary bg-indigo-50' : 'text-slate-600'
+              }`}
+              title="Add Location"
+            >
+              <MapPin size={20} />
+            </button>
+
+            {/* Image Upload */}
+            <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors" title="Upload Image">
+              <Upload size={20} />
+              <input 
+                type="file" 
+                accept="image/*" 
+                onChange={handleImageSelect}
+                className="hidden"
+              />
+            </label>
+
+            {/* File Attachment */}
+            <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors" title="Attach File">
+              <FileText size={20} />
+              <input 
+                type="file" 
+                accept=".pdf,.doc,.docx,.txt,.zip"
+                onChange={handleAttachmentSelect}
+                className="hidden"
+              />
+            </label>
+          </div>
           <button 
-            type="button"
-            onClick={async (e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              const hasContent = messageText.trim() || imageFile || videoFile || documentFile || selectedGif || (showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2);
-              
-              console.log('🔵 Send button clicked!', {
-                hasContent,
-                imageFile: !!imageFile,
-                imageFileName: imageFile?.name,
-                videoFile: !!videoFile,
-                videoFileName: videoFile?.name,
-                documentFile: !!documentFile,
-                documentFileName: documentFile?.name,
-                selectedGif: !!selectedGif,
-                messageText: messageText.trim(),
-                uploading: uploading,
-                selectedGroup: !!selectedGroup,
-                selectedGroupId: selectedGroup?.id,
-                user: !!user,
-                userId: user?.uid
-              });
-              
-              if (!hasContent) {
-                console.warn('⚠️ No content to send');
-                alert('Please add content to send (text, image, video, document, or sticker)');
-                return;
-              }
-              
-              if (uploading) {
-                console.warn('⏳ Already uploading, please wait...');
-                return;
-              }
-              
-              try {
-                await handleSendMessage();
-              } catch (error: any) {
-                console.error('❌ Send button error:', error);
-                alert(`Failed to send message: ${error.message || 'Unknown error'}`);
-              }
-            }}
-            disabled={
-              uploading || 
-              !selectedGroup || 
-              !user ||
-              (!messageText.trim() && 
-               !imageFile && 
-               !videoFile && 
-               !documentFile && 
-               !selectedGif && 
-               !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2))
-            }
-            style={{
-              opacity: (uploading || !selectedGroup || !user || (!messageText.trim() && !imageFile && !videoFile && !documentFile && !selectedGif && !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2))) ? 0.5 : 1,
-              cursor: (uploading || !selectedGroup || !user || (!messageText.trim() && !imageFile && !videoFile && !documentFile && !selectedGif && !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2))) ? 'not-allowed' : 'pointer'
-            }}
-            className={`p-2 rounded-full transition-colors ${
-              (uploading || !selectedGroup || !user || (!messageText.trim() && !imageFile && !videoFile && !documentFile && !selectedGif && !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2)))
-                ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                : 'bg-primary text-white hover:bg-indigo-700 cursor-pointer'
-            }`}
-            title={
-              uploading ? "Uploading..." :
-              !selectedGroup ? "Select a group" :
-              !user ? "Please log in" :
-              (!messageText.trim() && !imageFile && !videoFile && !documentFile && !selectedGif && !(showPollCreator && pollQuestion && pollOptions.filter(o => o.trim()).length >= 2)) 
-                ? "Add content to send" 
-                : "Send message"
-            }
+            onClick={handleSendMessage}
+            disabled={(!messageText.trim() && !selectedGif && !imageFile && !pollQuestion && !attachmentFile) || uploading}
+            className="bg-primary hover:bg-indigo-700 text-white px-4 md:px-6 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
           >
-            {uploading ? <div className="w-[18px] h-[18px] border-2 border-white border-t-transparent rounded-full animate-spin" /> : <Send size={18} />}
+            {uploading ? (
+              <>
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span className="hidden md:inline">Sending...</span>
+              </>
+            ) : (
+              <>
+                <span className="hidden md:inline">Send</span>
+                <Send size={16} />
+              </>
+            )}
           </button>
         </div>
+        
+        {/* Inline Tag Input */}
+        <input
+          id="tag-input"
+          type="text"
+          placeholder="#tag (press Enter)"
+          value={tagInput}
+          onChange={(e) => setTagInput(e.target.value)}
+          onKeyPress={handleTagInput}
+          className="mt-2 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+          style={{ display: 'none' }}
+        />
 
-        {/* Preview */}
-        {imagePreview && (
-          <div className="mt-2 relative inline-block">
-            <img src={imagePreview} alt="Preview" className="max-w-[200px] max-h-[200px] rounded-lg" />
-            <div className="absolute top-1 right-1 flex gap-1">
-              <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Ready to send</span>
-              <button
-                onClick={() => {
-                  console.log('🗑️ Removing image');
-                  setImageFile(null);
-                  setImagePreview('');
-                }}
-                className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+        {/* Tags */}
+        {tags.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-2">
+            {tags.map((tag, index) => (
+              <span
+                key={index}
+                className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium"
               >
-                <X size={14} />
-              </button>
-      </div>
+                #{tag}
+                <button
+                  onClick={() => setTags(tags.filter((_, i) => i !== index))}
+                  className="hover:text-indigo-900"
+                >
+                  <X size={12} />
+                </button>
+              </span>
+            ))}
           </div>
         )}
-        {videoFile && (
-          <div className="mt-2 flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-lg">
-            <Video size={16} className="text-primary" />
-            <span className="flex-1 truncate">{videoFile.name}</span>
-            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Ready to send</span>
-            <button 
-              onClick={() => {
-                console.log('🗑️ Removing video');
-                setVideoFile(null);
-              }} 
-              className="text-red-500 hover:text-red-700"
-            >
-              <X size={16} />
+
+        {/* Location */}
+        {location && (
+          <div className="mt-2 flex items-center gap-2 text-sm text-slate-600">
+            <MapPin size={14} />
+            <span className="truncate">{location.name}</span>
+            <button onClick={() => setLocation(null)} className="text-slate-400 hover:text-slate-600">
+              <X size={14} />
             </button>
           </div>
         )}
-        {documentFile && (
-          <div className="mt-2 flex items-center gap-2 text-sm text-slate-600 bg-slate-50 p-2 rounded-lg">
-            <File size={16} className="text-primary" />
-            <span className="flex-1 truncate">{documentFile.name}</span>
-            <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Ready to send</span>
-            <button 
-              onClick={() => {
-                console.log('🗑️ Removing document');
-                setDocumentFile(null);
-              }} 
-              className="text-red-500 hover:text-red-700"
-            >
-              <X size={16} />
+
+        {/* Attachment Preview */}
+        {attachmentPreview && (
+          <div className="mt-2 flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
+            <FileText size={16} className="text-slate-600" />
+            <span className="text-sm text-slate-700 truncate flex-1">{attachmentPreview.name}</span>
+            <button onClick={() => {
+              setAttachmentFile(null);
+              setAttachmentPreview(null);
+            }} className="text-slate-400 hover:text-slate-600">
+              <X size={14} />
             </button>
           </div>
         )}
+
+        {/* GIF Preview */}
         {selectedGif && (
-          <div className="mt-2 relative inline-block">
-            <img src={selectedGif} alt="Selected GIF" className="max-w-[200px] max-h-[200px] rounded-lg" />
-            <div className="absolute top-1 right-1 flex gap-1">
-              <span className="bg-green-500 text-white text-xs px-2 py-1 rounded-full">Ready to send</span>
-              <button
-                onClick={() => {
-                  console.log('🗑️ Removing GIF');
-                  setSelectedGif(null);
-                }}
-                className="bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-              >
-                <X size={14} />
-              </button>
-            </div>
+          <div className="mt-2 relative">
+            <img src={selectedGif} alt="Selected GIF" className="h-32 rounded-lg object-cover" />
+            <button
+              onClick={() => setSelectedGif(null)}
+              className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs hover:bg-black/70"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
+        {/* Image Preview */}
+        {imagePreview && (
+          <div className="mt-2 relative">
+            <img src={imagePreview} alt="Preview" className="h-32 rounded-lg object-cover" />
+            <button
+              onClick={() => {
+                setImageFile(null);
+                setImagePreview('');
+              }}
+              className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs hover:bg-black/70"
+            >
+              <X size={12} />
+            </button>
           </div>
         )}
       </div>
