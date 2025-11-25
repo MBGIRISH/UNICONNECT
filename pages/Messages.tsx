@@ -14,9 +14,11 @@ import {
   or,
   limit,
   updateDoc,
-  doc
+  doc,
+  getDoc
 } from 'firebase/firestore';
 import { uploadImageToCloudinary } from '../services/cloudinaryService';
+import { getUserProfile } from '../services/profileService';
 
 interface Message {
   id: string;
@@ -87,23 +89,62 @@ const Messages: React.FC = () => {
         return timeB - timeA; // Descending
       });
 
+      // First pass: Build conversation map with message data
       docs.forEach((doc) => {
         const msg = doc.data();
         const otherUserId = msg.senderId === currentUser.uid ? msg.receiverId : msg.senderId;
         
         if (!convMap.has(otherUserId)) {
+          // Determine the correct name and photo from message data
+          let userName = 'Unknown User';
+          let userPhoto = `https://ui-avatars.com/api/?name=User`;
+          
+          if (msg.senderId === currentUser.uid) {
+            // Current user sent this message, so use receiver's info
+            userName = msg.receiverName || 'Unknown User';
+            userPhoto = msg.receiverPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}`;
+          } else {
+            // Someone else sent this message, so use sender's info
+            userName = msg.senderName || 'Unknown User';
+            userPhoto = msg.senderPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}`;
+          }
+          
           convMap.set(otherUserId, {
             userId: otherUserId,
-            userName: msg.senderName || 'Unknown User',
-            userPhoto: msg.senderPhoto || `https://ui-avatars.com/api/?name=User`,
+            userName,
+            userPhoto,
             lastMessage: msg.text || '📷 Image',
             lastMessageTime: msg.createdAt,
             unread: msg.receiverId === currentUser.uid && !msg.read ? 1 : 0
           });
+        } else {
+          // Update unread count if needed
+          const existingConv = convMap.get(otherUserId);
+          if (existingConv && msg.receiverId === currentUser.uid && !msg.read) {
+            existingConv.unread += 1;
+          }
         }
       });
 
+      // Set conversations immediately with message data
       setConversations(Array.from(convMap.values()));
+
+      // Second pass: Fetch user profiles asynchronously and update
+      const userIds = Array.from(convMap.keys());
+      userIds.forEach(async (userId) => {
+        try {
+          const userProfile = await getUserProfile(userId);
+          if (userProfile) {
+            setConversations(prev => prev.map(conv => 
+              conv.userId === userId 
+                ? { ...conv, userName: userProfile.displayName || conv.userName, userPhoto: userProfile.photoURL || conv.userPhoto }
+                : conv
+            ));
+          }
+        } catch (error) {
+          console.error('Error fetching user profile:', error);
+        }
+      });
     });
 
     return () => unsubscribe();
@@ -228,19 +269,19 @@ const Messages: React.FC = () => {
 
   if (!selectedUser) {
     return (
-      <div className="flex h-screen bg-slate-50">
+      <div className="flex h-screen bg-slate-50 overflow-hidden pb-20 md:pb-0">
         {/* Conversations List */}
-        <div className="w-full md:w-96 bg-white border-r border-slate-200">
-          <div className="p-4 border-b border-slate-200">
-            <h1 className="text-2xl font-bold text-slate-800">Messages</h1>
+        <div className="w-full md:w-96 bg-white border-r border-slate-200 flex flex-col h-full">
+          <div className="p-3 sm:p-4 border-b border-slate-200 flex-shrink-0">
+            <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Messages</h1>
           </div>
 
-          <div className="overflow-y-auto h-[calc(100vh-80px)]">
+          <div className="flex-1 overflow-y-auto min-h-0 pb-20 md:pb-0" style={{ maxHeight: 'calc(100vh - 80px)' }}>
             {conversations.length === 0 ? (
-              <div className="text-center py-12">
-                <MessageCircle size={48} className="mx-auto text-slate-300 mb-4" />
-                <p className="text-slate-500 mb-2">No conversations yet</p>
-                <p className="text-sm text-slate-400 px-6">Use the search bar to find people and start chatting</p>
+              <div className="text-center py-12 px-4">
+                <MessageCircle size={40} className="sm:w-12 sm:h-12 mx-auto text-slate-300 mb-4" />
+                <p className="text-slate-500 mb-2 text-sm sm:text-base">No conversations yet</p>
+                <p className="text-xs sm:text-sm text-slate-400 px-6">Use the search bar to find people and start chatting</p>
               </div>
             ) : (
               conversations.map((conv) => (
@@ -251,23 +292,23 @@ const Messages: React.FC = () => {
                     name: conv.userName,
                     photo: conv.userPhoto
                   })}
-                  className="w-full p-4 hover:bg-slate-50 border-b border-slate-100 flex items-center gap-3 text-left"
+                  className="w-full p-3 sm:p-4 hover:bg-slate-50 active:bg-slate-100 border-b border-slate-100 flex items-center gap-2 sm:gap-3 text-left touch-manipulation"
                 >
                   <img 
                     src={conv.userPhoto}
                     alt={conv.userName}
-                    className="w-12 h-12 rounded-full"
+                    className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex-shrink-0"
                   />
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between">
-                      <p className="font-semibold text-slate-900">{conv.userName}</p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="font-semibold text-slate-900 text-sm sm:text-base truncate">{conv.userName}</p>
                       {conv.unread > 0 && (
-                        <span className="bg-primary text-white text-xs px-2 py-0.5 rounded-full">
+                        <span className="bg-primary text-white text-xs px-2 py-0.5 rounded-full flex-shrink-0">
                           {conv.unread}
                         </span>
                       )}
                     </div>
-                    <p className="text-sm text-slate-500 truncate">{conv.lastMessage}</p>
+                    <p className="text-xs sm:text-sm text-slate-500 truncate mt-0.5">{conv.lastMessage}</p>
                   </div>
                 </button>
               ))
@@ -275,7 +316,7 @@ const Messages: React.FC = () => {
           </div>
         </div>
 
-        {/* Empty State */}
+        {/* Empty State - Desktop only */}
         <div className="hidden md:flex flex-1 items-center justify-center bg-slate-50">
           <div className="text-center">
             <MessageCircle size={64} className="mx-auto text-slate-300 mb-4" />
@@ -288,28 +329,28 @@ const Messages: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen bg-white">
+    <div className="flex flex-col h-screen md:h-screen bg-white overflow-hidden pb-20 md:pb-0">
       {/* Chat Header */}
-      <div className="p-4 border-b border-slate-200 flex items-center gap-3 bg-white sticky top-0 z-10">
+      <div className="p-3 sm:p-4 border-b border-slate-200 flex items-center gap-2 sm:gap-3 bg-white sticky top-0 z-10 flex-shrink-0">
         <button 
           onClick={() => setSelectedUser(null)}
-          className="md:hidden"
+          className="md:hidden flex-shrink-0"
         >
-          <ArrowLeft size={24} className="text-slate-600" />
+          <ArrowLeft size={20} className="sm:w-6 sm:h-6 text-slate-600" />
         </button>
         <img 
           src={selectedUser.photo}
           alt={selectedUser.name}
-          className="w-10 h-10 rounded-full"
+          className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0"
         />
-        <div className="flex-1">
-          <h2 className="font-semibold text-slate-900">{selectedUser.name}</h2>
+        <div className="flex-1 min-w-0">
+          <h2 className="font-semibold text-slate-900 text-sm sm:text-base truncate">{selectedUser.name}</h2>
           <p className="text-xs text-green-500">Online</p>
         </div>
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-slate-50">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-slate-50 min-h-0" style={{ maxHeight: 'calc(100vh - 180px)' }}>
         {messages.map((msg) => {
           const isMine = msg.senderId === currentUser?.uid;
           return (
@@ -317,21 +358,21 @@ const Messages: React.FC = () => {
               key={msg.id}
               className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
             >
-              <div className={`max-w-[70%] ${isMine ? 'order-2' : 'order-1'}`}>
+              <div className={`max-w-[85%] sm:max-w-[70%] ${isMine ? 'order-2' : 'order-1'}`}>
                 {msg.imageUrl && (
                   <img 
                     src={msg.imageUrl}
                     alt="Shared"
-                    className="rounded-lg mb-1 max-h-64 w-auto"
+                    className="rounded-lg mb-1 max-h-48 sm:max-h-64 w-auto"
                   />
                 )}
                 {msg.text && (
-                  <div className={`px-4 py-2 rounded-2xl ${
+                  <div className={`px-3 py-2 sm:px-4 sm:py-2 rounded-2xl text-sm sm:text-base ${
                     isMine 
                       ? 'bg-primary text-white' 
                       : 'bg-white text-slate-900 border border-slate-200'
                   }`}>
-                    <p>{msg.text}</p>
+                    <p className="break-words">{msg.text}</p>
                   </div>
                 )}
                 <p className="text-xs text-slate-400 mt-1 px-2">
@@ -344,8 +385,8 @@ const Messages: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input */}
-      <div className="p-4 border-t border-slate-200 bg-white">
+      {/* Input - Sticky at bottom with safe area padding, above mobile nav */}
+      <div className="p-3 sm:p-4 border-t border-slate-200 bg-white fixed md:sticky bottom-20 md:bottom-0 left-0 right-0 z-10 flex-shrink-0 pb-safe md:pb-0">
         <div className="flex items-center gap-2">
           <input
             type="file"
@@ -357,9 +398,10 @@ const Messages: React.FC = () => {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-full"
+            className="p-2 text-slate-600 hover:bg-slate-100 rounded-full flex-shrink-0 touch-manipulation"
+            aria-label="Upload image"
           >
-            <ImageIcon size={20} />
+            <ImageIcon size={18} className="sm:w-5 sm:h-5" />
           </button>
           <input
             type="text"
@@ -367,16 +409,20 @@ const Messages: React.FC = () => {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Type a message..."
-            className="flex-1 px-4 py-2 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50"
+            className="flex-1 px-3 py-2 sm:px-4 sm:py-2 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm sm:text-base"
           />
           <button
             onClick={handleSendMessage}
-            disabled={!newMessage.trim()}
-            className="p-2 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={!newMessage.trim() || uploading}
+            className="p-2 sm:p-2.5 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 touch-manipulation transition-colors"
+            aria-label="Send message"
           >
-            <Send size={20} />
+            <Send size={18} className="sm:w-5 sm:h-5" />
           </button>
         </div>
+        {uploading && (
+          <p className="text-xs text-slate-500 mt-2 text-center">Uploading image...</p>
+        )}
       </div>
     </div>
   );

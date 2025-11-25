@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Loader2, Upload, GraduationCap, Smile, FileText, MapPin, Hash, BarChart3, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Post } from '../types';
 import Header from '../components/Header';
 import { db } from '../firebaseConfig';
@@ -8,6 +9,7 @@ import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, u
 import { uploadPostImages } from '../services/cloudinaryService';
 
 const Feed: React.FC = () => {
+  const navigate = useNavigate();
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPostText, setNewPostText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
@@ -70,6 +72,46 @@ const Feed: React.FC = () => {
         if (unsubscribe) unsubscribe();
     };
   }, []);
+
+  // Load user's liked posts on mount and when user/posts change
+  useEffect(() => {
+    if (!user || !db || posts.length === 0) {
+      setLikedPosts(new Set());
+      return;
+    }
+
+    const loadLikedPosts = async () => {
+      try {
+        const likedPostIds = new Set<string>();
+        
+        // Check each post to see if current user has liked it
+        // Use Promise.allSettled to handle errors gracefully
+        const results = await Promise.allSettled(
+          posts.map(async (post) => {
+            const likeRef = doc(db, 'posts', post.id, 'likes', user.uid);
+            const likeDoc = await getDoc(likeRef);
+            if (likeDoc.exists()) {
+              return post.id;
+            }
+            return null;
+          })
+        );
+        
+        // Collect all liked post IDs
+        results.forEach((result) => {
+          if (result.status === 'fulfilled' && result.value) {
+            likedPostIds.add(result.value);
+          }
+        });
+        
+        setLikedPosts(likedPostIds);
+      } catch (error) {
+        console.error('Error loading liked posts:', error);
+      }
+    };
+
+    loadLikedPosts();
+  }, [user?.uid, posts.length, db]);
 
   // Close pickers when clicking outside
   useEffect(() => {
@@ -326,17 +368,14 @@ const Feed: React.FC = () => {
     try {
       const postRef = doc(db, 'posts', postId);
       const likeRef = doc(db, 'posts', postId, 'likes', user.uid);
-      const isLiked = likedPosts.has(postId);
-
-      // Check if like document exists (double-check)
+      
+      // Always check Firestore to ensure accuracy (prevents race conditions)
       const likeDoc = await getDoc(likeRef);
       const actuallyLiked = likeDoc.exists();
 
-      if (isLiked || actuallyLiked) {
-        // Unlike - remove like document
-        if (actuallyLiked) {
-          await deleteDoc(likeRef);
-        }
+      if (actuallyLiked) {
+        // Unlike - remove like document (user already liked, so unlike)
+        await deleteDoc(likeRef);
         await updateDoc(postRef, {
           likesCount: increment(-1)
         });
@@ -346,16 +385,23 @@ const Feed: React.FC = () => {
           return newSet;
         });
       } else {
-        // Like - create like document to track user
-        await setDoc(likeRef, {
-          userId: user.uid,
-          userName: user.displayName || 'User',
-          createdAt: serverTimestamp()
-        });
-        await updateDoc(postRef, {
-          likesCount: increment(1)
-        });
-        setLikedPosts(prev => new Set(prev).add(postId));
+        // Like - create like document to track user (user hasn't liked yet)
+        // Double-check: Ensure no duplicate like exists
+        const doubleCheck = await getDoc(likeRef);
+        if (!doubleCheck.exists()) {
+          await setDoc(likeRef, {
+        userId: user.uid,
+            userName: user.displayName || 'User',
+            createdAt: serverTimestamp()
+          });
+          await updateDoc(postRef, {
+            likesCount: increment(1)
+          });
+          setLikedPosts(prev => new Set(prev).add(postId));
+        } else {
+          // Like already exists (race condition handled)
+          setLikedPosts(prev => new Set(prev).add(postId));
+        }
       }
     } catch (error) {
       console.error('Error toggling like:', error);
@@ -703,7 +749,7 @@ const Feed: React.FC = () => {
               </button>
 
               {/* Tag Input */}
-              <button
+              <button 
                 onClick={() => {
                   const input = document.getElementById('tag-input') as HTMLInputElement;
                   if (input) {
@@ -718,7 +764,7 @@ const Feed: React.FC = () => {
               </button>
 
               {/* Location */}
-              <button
+              <button 
                 onClick={handleGetLocation}
                 className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
                   location ? 'text-primary bg-indigo-50' : 'text-slate-600'
@@ -779,19 +825,24 @@ const Feed: React.FC = () => {
                 <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
                 <div className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
-                    <img src={post.authorAvatar} alt={post.authorName} className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-50" />
-                    <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold text-slate-900 text-sm truncate">{post.authorName}</h3>
-                        {post.authorCollege && (
-                          <div className="flex items-center gap-1 text-xs text-indigo-600 font-medium truncate">
-                            <GraduationCap size={12} className="flex-shrink-0" />
-                            <span className="truncate">{post.authorCollege}</span>
-                          </div>
-                        )}
-                        <p className="text-xs text-slate-500">
-                            {post.createdAt instanceof Date ? post.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Recent'}
-                        </p>
-                    </div>
+                    <button
+                      onClick={() => post.authorId && navigate(`/profile/${post.authorId}`)}
+                      className="flex items-center gap-3 hover:opacity-80 transition-opacity"
+                    >
+                      <img src={post.authorAvatar} alt={post.authorName} className="w-10 h-10 rounded-full object-cover ring-2 ring-slate-50" />
+                      <div className="min-w-0 flex-1 text-left">
+                          <h3 className="font-semibold text-slate-900 text-sm truncate hover:text-primary transition-colors cursor-pointer">{post.authorName}</h3>
+                          {post.authorCollege && (
+                            <div className="flex items-center gap-1 text-xs text-indigo-600 font-medium truncate">
+                              <GraduationCap size={12} className="flex-shrink-0" />
+                              <span className="truncate">{post.authorCollege}</span>
+                            </div>
+                          )}
+                          <p className="text-xs text-slate-500">
+                              {post.createdAt instanceof Date ? post.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : 'Recent'}
+                          </p>
+                      </div>
+                    </button>
                     </div>
                     <button className="text-slate-400 hover:bg-slate-50 p-1 rounded-full">
                     <MoreHorizontal size={20} />
@@ -880,7 +931,7 @@ const Feed: React.FC = () => {
                                       const hasVoted = optionVoters.includes(user.uid);
                                       
                                       if (hasVoted) {
-                                        // Remove vote
+                                        // Remove vote (allow unvoting)
                                         const newVoters = optionVoters.filter((uid: string) => uid !== user.uid);
                                         const newVoteCount = Math.max(0, (currentVotes[optionKey] || 0) - 1);
                                         
@@ -897,19 +948,36 @@ const Feed: React.FC = () => {
                                           return { ...prev, [post.id]: newPostVotes };
                                         });
                                       } else {
-                                        // Add vote
+                                        // SINGLE CHOICE: Remove user's vote from any other option first
+                                        const updateData: any = {};
+                                        let previousOptionIndex = -1;
+                                        
+                                        // Find which option user previously voted for (if any)
+                                        Object.keys(currentUserVotes).forEach((key) => {
+                                          const voters = currentUserVotes[key] || [];
+                                          if (voters.includes(user.uid)) {
+                                            previousOptionIndex = parseInt(key);
+                                            // Remove user from previous option
+                                            const newVoters = voters.filter((uid: string) => uid !== user.uid);
+                                            const newVoteCount = Math.max(0, (currentVotes[key] || 0) - 1);
+                                            updateData[`poll.votes.${key}`] = newVoteCount;
+                                            updateData[`poll.userVotes.${key}`] = newVoters;
+                                          }
+                                        });
+                                        
+                                        // Add vote to new option
                                         const newVoters = [...optionVoters, user.uid];
                                         const newVoteCount = (currentVotes[optionKey] || 0) + 1;
+                                        updateData[`poll.votes.${optionKey}`] = newVoteCount;
+                                        updateData[`poll.userVotes.${optionKey}`] = newVoters;
                                         
-                                        await updateDoc(postRef, {
-                                          [`poll.votes.${optionKey}`]: newVoteCount,
-                                          [`poll.userVotes.${optionKey}`]: newVoters
-                                        });
+                                        await updateDoc(postRef, updateData);
                                         
                                         // Update local state
                                         setPollVotes(prev => {
                                           const postVotes = prev[post.id] || new Set<number>();
-                                          const newPostVotes = new Set(postVotes);
+                                          const newPostVotes = new Set<number>();
+                                          // Only add the new vote (removing previous one)
                                           newPostVotes.add(index);
                                           return { ...prev, [post.id]: newPostVotes };
                                         });
@@ -993,7 +1061,7 @@ const Feed: React.FC = () => {
                       onClick={() => handleShare(post)}
                       className="text-slate-400 hover:text-slate-600 transition-colors"
                     >
-                      <Share2 size={20} />
+                    <Share2 size={20} />
                     </button>
                 </div>
 
@@ -1035,20 +1103,25 @@ const Feed: React.FC = () => {
                       {comments[post.id]?.length > 0 ? (
                         comments[post.id].map((comment: any) => (
                           <div key={comment.id} className="flex gap-2">
-                            <img 
-                              src={comment.authorAvatar || "https://ui-avatars.com/api/?name=User"} 
-                              alt={comment.authorName} 
-                              className="w-8 h-8 rounded-full object-cover"
-                            />
-                            <div className="flex-1 bg-white rounded-2xl px-4 py-2 border border-slate-100">
-                              <p className="font-semibold text-sm text-slate-900">{comment.authorName}</p>
-                              <p className="text-sm text-slate-700 mt-0.5">{comment.content}</p>
-                              <p className="text-xs text-slate-400 mt-1">
-                                {comment.createdAt instanceof Date 
-                                  ? comment.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
-                                  : 'Just now'}
-                              </p>
-                            </div>
+                            <button
+                              onClick={() => comment.authorId && navigate(`/profile/${comment.authorId}`)}
+                              className="flex items-start gap-2 hover:opacity-80 transition-opacity"
+                            >
+                              <img 
+                                src={comment.authorAvatar || "https://ui-avatars.com/api/?name=User"} 
+                                alt={comment.authorName} 
+                                className="w-8 h-8 rounded-full object-cover flex-shrink-0"
+                              />
+                              <div className="flex-1 bg-white rounded-2xl px-4 py-2 border border-slate-100 text-left">
+                                <p className="font-semibold text-sm text-slate-900 hover:text-primary transition-colors cursor-pointer">{comment.authorName}</p>
+                                <p className="text-sm text-slate-700 mt-0.5">{comment.content}</p>
+                                <p className="text-xs text-slate-400 mt-1">
+                                  {comment.createdAt instanceof Date 
+                                    ? comment.createdAt.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})
+                                    : 'Just now'}
+                                </p>
+                              </div>
+                            </button>
                           </div>
                         ))
                       ) : (

@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search, Smile, FileText, BarChart3, Video, File, Hash, MapPin } from 'lucide-react';
+import { Send, Bot, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search, Smile, FileText, BarChart3, Video, File, Hash, MapPin, Download } from 'lucide-react';
 import { StudyGroup, ChatMessage } from '../types';
 import Header from '../components/Header';
 import { generateStudyHelp } from '../services/geminiService';
@@ -40,6 +40,7 @@ const StudyGroups: React.FC = () => {
   const [myGroupIds, setMyGroupIds] = useState<Set<string>>(new Set());
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
+  const [showJoinRequestSuccess, setShowJoinRequestSuccess] = useState(false);
   const [userRole, setUserRole] = useState<Map<string, string>>(new Map());
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
@@ -326,7 +327,7 @@ const StudyGroups: React.FC = () => {
                 // Only log if it's a meaningful change (group/user changed), not just a re-render
                 if (selectedGroup?.id && user?.uid) {
                     console.log('🔌 Firestore listener unsubscribed (group/user changed)');
-                }
+        }
     } catch (e) {
                 console.error("Error unsubscribing:", e);
             }
@@ -443,8 +444,9 @@ const StudyGroups: React.FC = () => {
         });
 
         setShowJoinModal(false);
-        alert('Join request sent! The group owner will review your request.');
         loadGroups();
+        // Show success modal instead of alert
+        setShowJoinRequestSuccess(true);
       } else {
         // For public groups, join directly
         // Check if already a member
@@ -608,6 +610,41 @@ const StudyGroups: React.FC = () => {
   const removePollOption = (index: number) => {
     if (pollOptions.length > 2) {
       setPollOptions(pollOptions.filter((_, i) => i !== index));
+    }
+  };
+
+  // Handle file download
+  const handleDownload = async (url: string, fileName: string) => {
+    try {
+      // Fetch the file as a blob
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error('Failed to fetch file');
+      }
+      
+      const blob = await response.blob();
+      
+      // Create a temporary URL for the blob
+      const blobUrl = window.URL.createObjectURL(blob);
+      
+      // Create a temporary anchor element
+      const link = document.createElement('a');
+      link.href = blobUrl;
+      link.download = fileName; // Set the filename
+      link.style.display = 'none';
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the blob URL
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (error) {
+      console.error('Download error:', error);
+      // Fallback: open in new tab
+      window.open(url, '_blank');
+      alert('Download failed. File opened in new tab instead.');
     }
   };
 
@@ -1067,10 +1104,10 @@ const StudyGroups: React.FC = () => {
 
         {/* Create Group Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 md:p-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-                <h2 className="text-xl font-bold text-slate-800">Create Group</h2>
+              <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                <h2 className="text-lg md:text-xl font-bold text-slate-800">Create Group</h2>
                 <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600">
                   <X size={24}/>
                 </button>
@@ -1129,10 +1166,10 @@ const StudyGroups: React.FC = () => {
 
         {/* Join Group Modal */}
         {showJoinModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 md:p-6">
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-                <h2 className="text-xl font-bold text-slate-800">Join a Group</h2>
+              <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                <h2 className="text-lg md:text-xl font-bold text-slate-800">Join a Group</h2>
                 <button onClick={() => setShowJoinModal(false)} className="text-slate-400 hover:text-slate-600">
                   <X size={24}/>
                 </button>
@@ -1219,7 +1256,7 @@ const StudyGroups: React.FC = () => {
       )}
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 bg-slate-50">
+      <div className="flex-1 overflow-y-auto p-4 bg-slate-50 pb-20 md:pb-4">
         {messages.length === 0 && (
           <div className="text-center text-slate-400 text-sm mt-10">
             <Bot size={48} className="mx-auto text-indigo-300 mb-3" />
@@ -1268,17 +1305,16 @@ const StudyGroups: React.FC = () => {
                   <div className="mb-2 space-y-2">
                     {(msg as any).attachments.map((att: any, idx: number) => (
                       <div key={idx} className="p-3 bg-slate-100 rounded-lg flex items-center gap-2">
-                        <FileText size={20} className="text-primary" />
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-700">{att.name || 'Attachment'}</p>
-                          <a 
-                            href={att.url} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-xs text-primary hover:underline"
+                        <FileText size={20} className="text-primary flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-slate-700 truncate">{att.name || 'Attachment'}</p>
+                          <button
+                            onClick={() => handleDownload(att.url, att.name || 'attachment')}
+                            className="text-xs text-primary hover:underline mt-1 flex items-center gap-1"
                           >
+                            <Download size={12} />
                             Download
-                          </a>
+                          </button>
                         </div>
                       </div>
                     ))}
@@ -1407,14 +1443,14 @@ const StudyGroups: React.FC = () => {
         </div>
       )}
 
-      {/* Input Area */}
-      <div className="p-3 md:p-4 bg-white border-t border-slate-200">
+      {/* Input Area - Sticky at bottom on mobile */}
+      <div className="sticky bottom-0 bg-white border-t border-slate-200 p-2 md:p-4 pb-20 md:pb-4 z-20">
         <textarea
-          value={messageText}
-          onChange={(e) => setMessageText(e.target.value)}
+            value={messageText}
+            onChange={(e) => setMessageText(e.target.value)}
           placeholder="Type a message..."
-          className="w-full px-4 py-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
-          rows={3}
+          className="w-full px-3 md:px-4 py-2 md:py-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+          rows={2}
         />
 
         {/* Poll Creator */}
@@ -1466,25 +1502,28 @@ const StudyGroups: React.FC = () => {
           </div>
         )}
 
-        <div className="flex justify-between items-center border-t border-slate-100 pt-3 mt-3">
-          <div className="flex gap-1 md:gap-2 flex-wrap">
-            {/* Emoji Picker */}
-            <div className="relative">
-              <button
-                onClick={() => {
-                  setShowEmojiPicker(!showEmojiPicker);
-                  setShowGifPicker(false);
-                }}
-                className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors"
-                title="Add Emoji"
-              >
-                <Smile size={20} />
-              </button>
+        <div className="border-t border-slate-100 pt-2 mt-2">
+          {/* Icons Row + Send Button - Same line */}
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Icons Row - Scrollable on mobile */}
+            <div className="flex gap-1 sm:gap-2 overflow-x-auto hide-scrollbar flex-1 min-w-0">
+              {/* Emoji Picker */}
+              <div className="relative flex-shrink-0">
+                <button
+                  onClick={() => {
+                    setShowEmojiPicker(!showEmojiPicker);
+                    setShowGifPicker(false);
+                  }}
+                  className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation"
+                  title="Add Emoji"
+                >
+                  <Smile size={16} className="sm:w-5 sm:h-5" />
+                </button>
               {showEmojiPicker && (
                 <div
                   ref={emojiPickerRef}
-                  className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
-                  style={{ width: '280px' }}
+                  className="fixed sm:absolute bottom-20 sm:bottom-full left-2 sm:left-0 mb-2 sm:mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
+                  style={{ width: 'min(280px, calc(100vw - 1rem))' }}
                 >
                   <div className="grid grid-cols-5 gap-2">
                     {emojis.map((emoji, index) => (
@@ -1494,7 +1533,7 @@ const StudyGroups: React.FC = () => {
                           setMessageText(prev => prev + emoji);
                           setShowEmojiPicker(false);
                         }}
-                        className="text-2xl hover:bg-slate-50 rounded-lg p-2 transition-colors"
+                        className="text-xl sm:text-2xl hover:bg-slate-50 rounded-lg p-1.5 sm:p-2 transition-colors touch-manipulation"
                       >
                         {emoji}
                       </button>
@@ -1505,7 +1544,7 @@ const StudyGroups: React.FC = () => {
             </div>
 
             {/* GIF Picker */}
-            <div className="relative">
+            <div className="relative flex-shrink-0">
               <button
                 onClick={() => {
                   setShowGifPicker(!showGifPicker);
@@ -1514,16 +1553,16 @@ const StudyGroups: React.FC = () => {
                     searchGifs('trending');
                   }
                 }}
-                className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors"
+                className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation"
                 title="Add GIF"
               >
-                <ImageIcon size={20} />
+                <ImageIcon size={16} className="sm:w-5 sm:h-5" />
               </button>
               {showGifPicker && (
                 <div
                   ref={gifPickerRef}
-                  className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
-                  style={{ width: '320px', maxHeight: '400px' }}
+                  className="fixed sm:absolute bottom-20 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
+                  style={{ width: 'min(320px, calc(100vw - 1rem))', maxHeight: '400px' }}
                 >
                   <input
                     type="text"
@@ -1543,7 +1582,7 @@ const StudyGroups: React.FC = () => {
                           setSelectedGif(gif.images.fixed_height.url);
                           setShowGifPicker(false);
                         }}
-                        className="hover:opacity-80 transition-opacity"
+                        className="hover:opacity-80 transition-opacity touch-manipulation"
                       >
                         <img
                           src={gif.images.fixed_height_small.url}
@@ -1564,12 +1603,12 @@ const StudyGroups: React.FC = () => {
                 setShowEmojiPicker(false);
                 setShowGifPicker(false);
               }}
-              className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
+              className={`p-1.5 sm:p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
                 showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
               }`}
               title="Create Poll"
             >
-              <BarChart3 size={20} />
+              <BarChart3 size={16} className="sm:w-5 sm:h-5" />
             </button>
 
             {/* Tag Input */}
@@ -1581,26 +1620,26 @@ const StudyGroups: React.FC = () => {
                   if (input.style.display !== 'none') input.focus();
                 }
               }}
-              className="p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors"
+              className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0"
               title="Add Tags"
             >
-              <Hash size={20} />
+              <Hash size={16} className="sm:w-5 sm:h-5" />
             </button>
 
             {/* Location */}
             <button
               onClick={handleGetLocation}
-              className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
+              className={`p-1.5 sm:p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
                 location ? 'text-primary bg-indigo-50' : 'text-slate-600'
               }`}
               title="Add Location"
             >
-              <MapPin size={20} />
+              <MapPin size={16} className="sm:w-5 sm:h-5" />
             </button>
 
             {/* Image Upload */}
-            <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors" title="Upload Image">
-              <Upload size={20} />
+            <label className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0" title="Upload Image">
+              <Upload size={16} className="sm:w-5 sm:h-5" />
               <input 
                 type="file" 
                 accept="image/*" 
@@ -1610,8 +1649,8 @@ const StudyGroups: React.FC = () => {
             </label>
 
             {/* File Attachment */}
-            <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors" title="Attach File">
-              <FileText size={20} />
+            <label className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0" title="Attach File">
+              <FileText size={16} className="sm:w-5 sm:h-5" />
               <input 
                 type="file" 
                 accept=".pdf,.doc,.docx,.txt,.zip"
@@ -1619,25 +1658,29 @@ const StudyGroups: React.FC = () => {
                 className="hidden"
               />
             </label>
-          </div>
+            </div>
+            
+            {/* Send Button - Same line, right side */}
           <button 
             onClick={handleSendMessage}
-            disabled={(!messageText.trim() && !selectedGif && !imageFile && !pollQuestion && !attachmentFile) || uploading}
-            className="bg-primary hover:bg-indigo-700 text-white px-4 md:px-6 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
-          >
-            {uploading ? (
-              <>
-                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                <span className="hidden md:inline">Sending...</span>
-              </>
-            ) : (
-              <>
-                <span className="hidden md:inline">Send</span>
-                <Send size={16} />
-              </>
-            )}
+              disabled={(!messageText.trim() && !selectedGif && !imageFile && !pollQuestion && !attachmentFile) || uploading}
+              className="bg-primary hover:bg-indigo-700 text-white px-3 sm:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-1 sm:gap-2 justify-center touch-manipulation flex-shrink-0 shadow-sm"
+            >
+              {uploading ? (
+                <>
+                  <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span className="hidden sm:inline">Sending...</span>
+                  <span className="sm:hidden text-xs">...</span>
+                </>
+              ) : (
+                <>
+                  <span className="hidden sm:inline">Send</span>
+                  <Send size={14} className="sm:w-4 sm:h-4" />
+                </>
+              )}
           </button>
         </div>
+      </div>
         
         {/* Inline Tag Input */}
         <input
@@ -1668,7 +1711,7 @@ const StudyGroups: React.FC = () => {
                 </button>
               </span>
             ))}
-          </div>
+      </div>
         )}
 
         {/* Location */}
@@ -1726,12 +1769,33 @@ const StudyGroups: React.FC = () => {
         )}
       </div>
 
+      {/* Join Request Success Modal */}
+      {showJoinRequestSuccess && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl w-full max-w-sm overflow-hidden">
+            <div className="p-6 text-center">
+              <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Users size={32} className="text-green-600" />
+              </div>
+              <h2 className="text-xl font-bold text-slate-800 mb-2">Join Request Sent!</h2>
+              <p className="text-slate-600 text-sm mb-6">The group owner will review your request.</p>
+              <button 
+                onClick={() => setShowJoinRequestSuccess(false)}
+                className="w-full bg-primary text-white py-3 rounded-xl font-semibold hover:bg-indigo-700 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Join Requests Modal */}
       {showRequestsModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 md:p-6">
           <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-              <h2 className="text-xl font-bold text-slate-800">Join Requests</h2>
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+              <h2 className="text-lg md:text-xl font-bold text-slate-800">Join Requests</h2>
               <button onClick={() => setShowRequestsModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X size={24}/>
               </button>

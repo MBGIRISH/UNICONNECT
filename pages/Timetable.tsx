@@ -44,19 +44,33 @@ const Timetable: React.FC = () => {
     if (user) {
       loadClasses();
     }
+    
+    // Request notification permission on mount
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().catch(err => {
+        console.error('Error requesting notification permission:', err);
+      });
+    }
   }, [user]);
 
   // Check for upcoming and ongoing classes every minute
   useEffect(() => {
+    if (!user || classes.length === 0) return;
+
     const checkClassReminders = () => {
       const now = new Date();
       const currentDate = now.toDateString();
       
       // Reset notifications if it's a new day
-      if (lastNotificationDate !== currentDate) {
-        setNotifiedClasses(new Set());
-        setLastNotificationDate(currentDate);
-      }
+      setNotifiedClasses(prev => {
+        setLastNotificationDate(prevDate => {
+          if (prevDate !== currentDate) {
+            return currentDate;
+          }
+          return prevDate;
+        });
+        return prev;
+      });
       
       const currentDay = DAYS[now.getDay() === 0 ? 5 : now.getDay() - 1]; // Sunday = Saturday index
       const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
@@ -73,59 +87,69 @@ const Timetable: React.FC = () => {
         const nowMinutes = now.getHours() * 60 + now.getMinutes();
         const diffMinutes = classStartMinutes - nowMinutes;
         
-        // Notify 5-10 minutes before class starts
-        return diffMinutes >= 5 && diffMinutes <= 10;
+        // Notify 5-10 minutes before class starts (inclusive range)
+        // This ensures notifications are sent when exactly 10, 9, 8, 7, 6, or 5 minutes remain
+        return diffMinutes >= 5 && diffMinutes <= 10 && diffMinutes > 0;
       });
 
-      if (upcoming && !notifiedClasses.has(upcoming.id)) {
-        setUpcomingClass(upcoming);
-        
-        // Calculate minutes until class
-        const classStartMinutes = parseInt(upcoming.startTime.split(':')[0]) * 60 + parseInt(upcoming.startTime.split(':')[1]);
-        const nowMinutes = now.getHours() * 60 + now.getMinutes();
-        const minutesUntil = classStartMinutes - nowMinutes;
-        
-        // Send notification to Firestore
-        if (user && db) {
-          addNotification(user.uid, {
-            type: 'class_reminder',
-            title: 'Class Starting Soon',
-            message: `${upcoming.subject} starts in ${minutesUntil} minutes at ${upcoming.startTime} in ${upcoming.location}`,
-            link: '/timetable',
-            createdAt: new Date()
-          }).catch(err => console.error('Failed to add notification:', err));
-        }
+      if (upcoming) {
+        setNotifiedClasses(prev => {
+          // Check if already notified
+          if (prev.has(upcoming.id)) {
+            return prev;
+          }
+          
+          // Mark as notified first to prevent duplicate notifications
+          const newSet = new Set(prev);
+          newSet.add(upcoming.id);
+          
+          setUpcomingClass(upcoming);
+          
+          // Calculate minutes until class
+          const classStartMinutes = parseInt(upcoming.startTime.split(':')[0]) * 60 + parseInt(upcoming.startTime.split(':')[1]);
+          const nowMinutes = now.getHours() * 60 + now.getMinutes();
+          const minutesUntil = classStartMinutes - nowMinutes;
+          
+          // Send notification to Firestore
+          if (user && db) {
+            addNotification(user.uid, {
+              type: 'class_reminder',
+              title: 'Class Starting Soon',
+              message: `${upcoming.subject} starts in ${minutesUntil} minutes at ${upcoming.startTime} in ${upcoming.location}`,
+              link: '/timetable',
+              createdAt: new Date()
+            }).catch(err => console.error('Failed to add notification:', err));
+          }
 
-        // Show browser notification if permission granted
-        if ('Notification' in window && Notification.permission === 'granted') {
-                new Notification('📚 Class Reminder', {
-                  body: `${upcoming.subject} starts in ${minutesUntil} minutes\nTime: ${upcoming.startTime}\nLocation: ${upcoming.location}${upcoming.professor ? `\nProfessor: ${upcoming.professor}` : ''}`,
-                  tag: `class-${upcoming.id}`,
-                  requireInteraction: false
-                });
-        }
-
-        // Mark as notified
-        setNotifiedClasses(prev => new Set(prev).add(upcoming.id));
-      } else if (!upcoming) {
+          // Show browser notification if permission granted
+          if ('Notification' in window && Notification.permission === 'granted') {
+            try {
+              new Notification('📚 Class Reminder', {
+                body: `${upcoming.subject} starts in ${minutesUntil} minutes\nTime: ${upcoming.startTime}\nLocation: ${upcoming.location}${upcoming.professor ? `\nProfessor: ${upcoming.professor}` : ''}`,
+                tag: `class-${upcoming.id}`,
+                requireInteraction: false
+              });
+            } catch (err) {
+              console.error('Failed to show browser notification:', err);
+            }
+          }
+          
+          return newSet;
+        });
+      } else {
         setUpcomingClass(null);
       }
     };
-
-          // Request notification permission on mount (only if not already requested)
-          if ('Notification' in window && Notification.permission === 'default') {
-            // Only request permission on user interaction, not automatically
-            // Permission will be requested when user interacts with timetable
-          }
 
     // Check immediately
     checkClassReminders();
 
     // Check every 30 seconds for more accurate timing (5-10 minute window)
+    // This ensures we catch the notification window precisely
     const interval = setInterval(checkClassReminders, 30000);
 
     return () => clearInterval(interval);
-  }, [classes, user, notifiedClasses]);
+  }, [classes, user, db]);
 
   const loadClasses = async () => {
     if (!user || !db) {

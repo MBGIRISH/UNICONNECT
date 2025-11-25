@@ -127,6 +127,7 @@ const OnboardingGuard = ({ children }: { children: React.ReactElement }) => {
 // Protected Route component
 const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -143,12 +144,26 @@ const ProtectedRoute = ({ children }: { children: React.ReactElement }) => {
     return <Navigate to="/login" replace />;
   }
 
+  // STRICT: Block ALL unverified password-based accounts from accessing app
+  // Users MUST click verification link in email to access the app
+  if (
+    !user.emailVerified && 
+    user.providerData[0]?.providerId === 'password'
+  ) {
+    // Only redirect if not already on login page (to prevent loops)
+    if (location.pathname !== '/login' && location.pathname !== '/onboarding') {
+      return <Navigate to="/login?verify=true" replace />;
+    }
+    // If already on login, show verification prompt (handled by Login component)
+  }
+
   return children;
 };
 
 // Public Route component (redirect to home if already logged in)
 const PublicRoute = ({ children }: { children: React.ReactElement }) => {
   const { user, loading } = useAuth();
+  const location = useLocation();
 
   if (loading) {
     return (
@@ -158,8 +173,17 @@ const PublicRoute = ({ children }: { children: React.ReactElement }) => {
     );
   }
 
+  // Only redirect if user is verified (or Google sign-in which is auto-verified)
+  // Allow unverified users to stay on login page to see verification prompt
   if (user) {
-    return <Navigate to="/" replace />;
+    const isVerified = user.emailVerified || user.providerData[0]?.providerId !== 'password';
+    if (isVerified && location.pathname === '/login') {
+      return <Navigate to="/" replace />;
+    }
+    // If unverified and on login, allow them to stay (they'll see verification prompt)
+    if (isVerified && location.pathname !== '/login') {
+      return <Navigate to="/" replace />;
+    }
   }
 
   return children;

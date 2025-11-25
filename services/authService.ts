@@ -4,7 +4,9 @@ import {
   signInWithPopup,
   signOut as firebaseSignOut,
   sendPasswordResetEmail,
+  sendEmailVerification,
   confirmPasswordReset,
+  applyActionCode,
   updateProfile as firebaseUpdateProfile,
   updatePassword,
   reauthenticateWithCredential,
@@ -26,6 +28,22 @@ export const signUp = async (email: string, password: string, displayName: strin
     photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=4f46e5&color=fff`
   });
 
+  // Send email verification with app link - user MUST click link to access app
+  try {
+    // Use the current origin to build the verification URL
+    const baseUrl = window.location.origin;
+    const loginUrl = baseUrl + '/#/login';
+    
+    await sendEmailVerification(user, {
+      url: loginUrl,
+      handleCodeInApp: true
+    });
+    console.log('✅ Verification email sent with app link:', loginUrl);
+  } catch (error) {
+    console.error('Error sending verification email:', error);
+    // Don't throw - user can still proceed, but they'll need to verify later
+  }
+
   // Create Firestore user document
   const userDoc: Omit<User, 'uid'> = {
     email: user.email!,
@@ -34,7 +52,8 @@ export const signUp = async (email: string, password: string, displayName: strin
     bio: '',
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
-    isOnline: true
+    isOnline: true,
+    emailVerified: false // Track verification status
   };
 
   await setDoc(doc(db, 'users', user.uid), userDoc);
@@ -45,14 +64,28 @@ export const signUp = async (email: string, password: string, displayName: strin
 // Sign in with email and password
 export const signIn = async (email: string, password: string): Promise<FirebaseUser> => {
   const userCredential = await signInWithEmailAndPassword(auth, email, password);
+  const user = userCredential.user;
+  
+  // Check if email is verified
+  if (!user.emailVerified) {
+    // Update Firestore with current verification status
+    await setDoc(doc(db, 'users', user.uid), {
+      emailVerified: false,
+      isOnline: false
+    }, { merge: true });
+    
+    // Throw error to prevent login
+    throw new Error('EMAIL_NOT_VERIFIED');
+  }
   
   // Update online status
-  await setDoc(doc(db, 'users', userCredential.user.uid), {
+  await setDoc(doc(db, 'users', user.uid), {
     isOnline: true,
-    lastSeen: serverTimestamp()
+    lastSeen: serverTimestamp(),
+    emailVerified: true
   }, { merge: true });
 
-  return userCredential.user;
+  return user;
 };
 
 // Sign in with Google
@@ -368,6 +401,66 @@ export const getUserData = async (uid: string): Promise<User | null> => {
   }
   
   return null;
+};
+
+// Resend verification email
+export const resendVerificationEmail = async (): Promise<void> => {
+  const user = auth.currentUser;
+  if (!user) {
+    throw new Error('No user is currently signed in');
+  }
+  
+  if (user.emailVerified) {
+    throw new Error('Email is already verified');
+  }
+  
+  try {
+    const baseUrl = window.location.origin;
+    const loginUrl = baseUrl + '/#/login';
+    await sendEmailVerification(user, {
+      url: loginUrl,
+      handleCodeInApp: true
+    });
+  } catch (error: any) {
+    if (error.code === 'auth/too-many-requests') {
+      throw new Error('Too many requests. Please wait a few minutes and try again.');
+    }
+    throw new Error('Failed to send verification email. Please try again.');
+  }
+};
+
+// Verify email with action code (from email link)
+export const verifyEmailWithActionCode = async (actionCode: string): Promise<void> => {
+  if (!actionCode || actionCode.length < 20) {
+    throw new Error('Invalid verification link. Please request a new verification email.');
+  }
+  
+  try {
+    await applyActionCode(auth, actionCode);
+    console.log('✅ Email verified successfully');
+    
+    // Reload user to get updated verification status
+    const user = auth.currentUser;
+    if (user) {
+      await user.reload();
+    }
+  } catch (error: any) {
+    console.error('Error verifying email:', error);
+    if (error.code === 'auth/expired-action-code') {
+      throw new Error('Verification link has expired. Please request a new verification email.');
+    } else if (error.code === 'auth/invalid-action-code') {
+      throw new Error('Invalid verification link. Please request a new verification email.');
+    } else if (error.code === 'auth/user-disabled') {
+      throw new Error('This account has been disabled. Please contact support.');
+    }
+    throw new Error('Failed to verify email. Please try again.');
+  }
+};
+
+// Check if current user's email is verified
+export const isEmailVerified = (): boolean => {
+  const user = auth.currentUser;
+  return user ? user.emailVerified : false;
 };
 
 // Alias for signOut (for convenience)

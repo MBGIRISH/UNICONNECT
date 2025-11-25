@@ -166,6 +166,22 @@ const Onboarding: React.FC = () => {
       }
     }
     
+    // Validate step 3 (bio, location, phone) - all required
+    if (step === 3) {
+      if (!formData.bio || formData.bio.trim() === '') {
+        alert('Please enter your bio. This field is required.');
+        return;
+      }
+      if (!formData.location || formData.location.trim() === '') {
+        alert('Please enter your location. This field is required.');
+        return;
+      }
+      if (!formData.phone || formData.phone.trim() === '') {
+        alert('Please enter your phone number. This field is required.');
+        return;
+      }
+    }
+    
     if (step < 4) {
       setStep(step + 1);
     }
@@ -199,6 +215,17 @@ const Onboarding: React.FC = () => {
       // Validate required fields
       if (!finalCollege || finalCollege.trim() === '') {
         throw new Error('Please select or enter your college');
+      }
+      
+      // Validate required fields: bio, location, phone
+      if (!formData.bio || formData.bio.trim() === '') {
+        throw new Error('Please enter your bio. This field is required.');
+      }
+      if (!formData.location || formData.location.trim() === '') {
+        throw new Error('Please enter your location. This field is required.');
+      }
+      if (!formData.phone || formData.phone.trim() === '') {
+        throw new Error('Please enter your phone number. This field is required.');
       }
 
       // Update other profile fields
@@ -302,32 +329,43 @@ const Onboarding: React.FC = () => {
               </div>
 
               <div className="space-y-4">
-                <div className="relative">
-                  <GraduationCap className="absolute left-3 top-3.5 text-slate-400" size={20} />
-                  <select
-                    value={formData.college}
-                    onChange={(e) => setFormData({ ...formData, college: e.target.value, customCollege: '' })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none"
-                  >
-                    <option value="">Select your college...</option>
-                    {POPULAR_COLLEGES.map((college) => (
-                      <option key={college} value={college}>
-                        {college}
-                      </option>
-                    ))}
-                  </select>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    College
+                  </label>
+                  <div className="relative">
+                    <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <select
+                      value={formData.college}
+                      onChange={(e) => setFormData({ ...formData, college: e.target.value, customCollege: '' })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none"
+                    >
+                      <option value="">Select your college...</option>
+                      {POPULAR_COLLEGES.map((college) => (
+                        <option key={college} value={college}>
+                          {college}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
 
                 {formData.college === 'Other (Enter Your College)' && (
-                  <div className="relative">
-                    <GraduationCap className="absolute left-3 top-3.5 text-slate-400" size={20} />
-                    <input
-                      type="text"
-                      value={formData.customCollege}
-                      onChange={(e) => setFormData({ ...formData, customCollege: e.target.value })}
-                      placeholder="Enter your college name"
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                    />
+                  <div>
+                    <label className="block text-sm font-medium text-slate-700 mb-1">
+                      Custom College Name
+                    </label>
+                    <div className="relative">
+                      <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                      <input
+                        required
+                        type="text"
+                        value={formData.customCollege}
+                        onChange={(e) => setFormData({ ...formData, customCollege: e.target.value })}
+                        placeholder="Enter your college name"
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      />
+                    </div>
                   </div>
                 )}
 
@@ -355,7 +393,7 @@ const Onboarding: React.FC = () => {
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">
-                    Bio
+                    Bio <span className="text-red-500">*</span>
                   </label>
                   <textarea
                     value={formData.bio}
@@ -363,40 +401,61 @@ const Onboarding: React.FC = () => {
                     placeholder="Tell us about yourself..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 px-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all resize-none"
                     rows={4}
+                    required
                   />
+                  <p className="text-xs text-slate-500 mt-1">This field is required</p>
                 </div>
 
-                <div className="relative">
-                  <MapPin className="absolute left-3 top-3.5 text-slate-400" size={20} />
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    placeholder="Location (e.g., Boston, MA)"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                  />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Location <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <MapPin className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <input
+                      type="text"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      placeholder="Location (e.g., Boston, MA)"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">This field is required</p>
                 </div>
 
-                <div className="relative">
-                  <Phone className="absolute left-3 top-3.5 text-slate-400" size={20} />
-                  <input
-                    type="tel"
-                    value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    placeholder="Phone Number"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                  />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Phone Number <span className="text-red-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <input
+                      type="tel"
+                      value={formData.phone}
+                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      placeholder="Phone Number"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                      required
+                    />
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1">This field is required</p>
                 </div>
 
-                <div className="relative">
-                  <Globe className="absolute left-3 top-3.5 text-slate-400" size={20} />
-                  <input
-                    type="url"
-                    value={formData.website}
-                    onChange={(e) => setFormData({ ...formData, website: e.target.value })}
-                    placeholder="Website"
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                  />
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Website
+                  </label>
+                  <div className="relative">
+                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <input
+                      type="url"
+                      value={formData.website}
+                      onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                      placeholder="Website"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
                 </div>
               </div>
             </div>

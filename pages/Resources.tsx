@@ -56,6 +56,9 @@ const Resources: React.FC = () => {
   const departments = [
     'All', 
     'Computer Science', 
+    'Data Science',
+    'CSE-Business Systems',
+    'CSE-Design',
     'Artificial Intelligence & Machine Learning (AIML)', 
     'Information Science & Engineering (ISE)', 
     'Cyber Security', 
@@ -308,8 +311,8 @@ const Resources: React.FC = () => {
       
       <div className="max-w-6xl mx-auto p-4 md:px-6 space-y-4">
         {/* Search and Filter Bar */}
-        <div className="bg-white rounded-2xl p-4 shadow-sm border border-slate-100">
-          <div className="flex flex-col md:flex-row gap-3">
+        <div className="bg-white rounded-2xl p-3 md:p-4 shadow-sm border border-slate-100">
+          <div className="flex flex-col gap-3">
             {/* Search */}
             <div className="flex-1 relative">
               <Search size={18} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-slate-400" />
@@ -318,57 +321,61 @@ const Resources: React.FC = () => {
                 placeholder="Search resources, subjects, module numbers..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
+                className="w-full pl-10 pr-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm md:text-base"
               />
             </div>
 
-            {/* Department Filter */}
-            <select
-              value={selectedDepartment}
-              onChange={(e) => setSelectedDepartment(e.target.value)}
-              className="px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              {departments.map((dept) => (
-                <option key={dept} value={dept}>
-                  {dept}
-                </option>
-              ))}
-            </select>
+            {/* Filters Row */}
+            <div className="flex flex-col sm:flex-row gap-2">
+              {/* Department Filter */}
+              <select
+                value={selectedDepartment}
+                onChange={(e) => setSelectedDepartment(e.target.value)}
+                className="flex-1 px-3 md:px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm md:text-base"
+              >
+                {departments.map((dept) => (
+                  <option key={dept} value={dept}>
+                    {dept}
+                  </option>
+                ))}
+              </select>
 
-            {/* Year Filter */}
-            <select
-              value={selectedYear}
-              onChange={(e) => setSelectedYear(e.target.value)}
-              className="px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              {years.map((yr) => (
-                <option key={yr} value={yr}>
-                  {yr}
-                </option>
-              ))}
-            </select>
+              {/* Year Filter */}
+              <select
+                value={selectedYear}
+                onChange={(e) => setSelectedYear(e.target.value)}
+                className="flex-1 px-3 md:px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm md:text-base"
+              >
+                {years.map((yr) => (
+                  <option key={yr} value={yr}>
+                    {yr}
+                  </option>
+                ))}
+              </select>
 
-            {/* Module Number Filter */}
-            <select
-              value={selectedModule}
-              onChange={(e) => setSelectedModule(e.target.value)}
-              className="px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-            >
-              {modules.map((mod) => (
-                <option key={mod} value={mod}>
-                  {mod}
-                </option>
-              ))}
-            </select>
+              {/* Module Number Filter */}
+              <select
+                value={selectedModule}
+                onChange={(e) => setSelectedModule(e.target.value)}
+                className="flex-1 px-3 md:px-4 py-2.5 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm md:text-base"
+              >
+                {modules.map((mod) => (
+                  <option key={mod} value={mod}>
+                    {mod}
+                  </option>
+                ))}
+              </select>
 
-            {/* Upload Button */}
-            <button
-              onClick={() => setShowUploadModal(true)}
-              className="bg-primary text-white px-6 py-2.5 rounded-lg font-medium hover:bg-indigo-700 flex items-center gap-2 whitespace-nowrap"
-            >
-              <Upload size={18} />
-              Upload
-            </button>
+              {/* Upload Button */}
+              <button
+                onClick={() => setShowUploadModal(true)}
+                className="bg-primary text-white px-4 md:px-6 py-2.5 rounded-lg font-medium hover:bg-indigo-700 flex items-center justify-center gap-2 whitespace-nowrap text-sm md:text-base"
+              >
+                <Upload size={18} />
+                <span className="hidden sm:inline">Upload</span>
+                <span className="sm:hidden">+</span>
+              </button>
+            </div>
           </div>
 
           {/* Active Filters */}

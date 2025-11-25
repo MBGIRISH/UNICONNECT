@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { User, Lock, Mail, ArrowRight, Loader2, AlertCircle, Eye, EyeOff } from 'lucide-react';
-import { signUp, signIn, signInWithGoogle, sendPasswordResetCode, confirmPasswordResetWithActionCode } from '../services/authService';
+import { User, Lock, Mail, ArrowRight, Loader2, AlertCircle, Eye, EyeOff, CheckCircle } from 'lucide-react';
+import { signUp, signIn, signInWithGoogle, sendPasswordResetCode, confirmPasswordResetWithActionCode, resendVerificationEmail, verifyEmailWithActionCode } from '../services/authService';
+import { auth } from '../firebaseConfig';
 
 const Login: React.FC = () => {
   const [isLogin, setIsLogin] = useState(true);
@@ -18,12 +19,74 @@ const Login: React.FC = () => {
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
   const [storedActionCode, setStoredActionCode] = useState<string | null>(null);
+  const [showVerificationPrompt, setShowVerificationPrompt] = useState(false);
+  const [resendingEmail, setResendingEmail] = useState(false);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   
   // Check if we have action code from email link
   const actionCode = searchParams.get('oobCode');
   const mode = searchParams.get('mode');
+  const verifyParam = searchParams.get('verify');
+  
+  // Handle email verification from email link
+  useEffect(() => {
+    // Check if user clicked verification link from email
+    if (actionCode && mode === 'verifyEmail') {
+      setLoading(true);
+      setError('');
+      setSuccess('');
+      
+      verifyEmailWithActionCode(actionCode)
+        .then(() => {
+          setSuccess('✅ Email verified successfully! You can now sign in to access the app.');
+          setShowVerificationPrompt(false);
+          setSearchParams({});
+          
+          // Reload user to get updated verification status
+          auth.currentUser?.reload().then(() => {
+            if (auth.currentUser?.emailVerified) {
+              // User is now verified, they can sign in
+              setEmail(auth.currentUser.email || '');
+            }
+          });
+        })
+        .catch((err: any) => {
+          setError(err.message || 'Failed to verify email. Please try again.');
+          setSearchParams({});
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+    
+    // Check if user needs to verify email (redirected from protected route)
+    if (verifyParam === 'true' && auth.currentUser && !auth.currentUser.emailVerified) {
+      setShowVerificationPrompt(true);
+      setEmail(auth.currentUser.email || '');
+    }
+  }, [actionCode, mode, verifyParam, searchParams, setSearchParams]);
+  
+  // Separate effect for periodic verification check (only when prompt is shown)
+  useEffect(() => {
+    if (!showVerificationPrompt || !auth.currentUser) return;
+    
+    // Check if email was verified (in case user verified in another tab)
+    const checkInterval = setInterval(() => {
+      auth.currentUser?.reload().then(() => {
+        if (auth.currentUser?.emailVerified) {
+          setSuccess('Email verified! Redirecting...');
+          setShowVerificationPrompt(false);
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+          clearInterval(checkInterval);
+        }
+      }).catch(() => {});
+    }, 5000); // Check every 5 seconds (less frequent to avoid issues)
+    
+    return () => clearInterval(checkInterval);
+  }, [showVerificationPrompt]);
   
   // Handle action code from email link - show password reset form
   useEffect(() => {
@@ -100,7 +163,7 @@ const Login: React.FC = () => {
           }
 
           await sendPasswordResetCode(email);
-          setSuccess('Password reset email sent! Please check your email and click the reset link. You will be able to enter your new password on that page.');
+          setSuccess('Password reset email sent! Please check your email inbox or spam folder and click the reset link. You will be able to enter your new password on that page.');
           setError('');
           // Don't change step - user needs to click email link
         } else if (resetStep === 'password') {
@@ -153,31 +216,47 @@ const Login: React.FC = () => {
           }
         }
       } else if (isLogin) {
-        const user = await signIn(email, password);
-        
-        // Check if user needs onboarding
-        const { doc, getDoc } = await import('firebase/firestore');
-        const { db } = await import('../firebaseConfig');
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        
-        if (userDoc.exists()) {
-          const userData = userDoc.data();
-          // If user doesn't have college set, they need onboarding
-          if (!userData.college) {
-            navigate('/onboarding');
+        try {
+          const user = await signIn(email, password);
+          
+          // Check if user needs onboarding
+          const { doc, getDoc } = await import('firebase/firestore');
+          const { db } = await import('../firebaseConfig');
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          
+          if (userDoc.exists()) {
+            const userData = userDoc.data();
+            // If user doesn't have college set, they need onboarding
+            if (!userData.college) {
+              navigate('/onboarding');
+            } else {
+              navigate('/');
+            }
           } else {
-            navigate('/');
+            // User document doesn't exist, go to onboarding
+            navigate('/onboarding');
           }
-        } else {
-          // User document doesn't exist, go to onboarding
-          navigate('/onboarding');
+        } catch (signInError: any) {
+          if (signInError.message === 'EMAIL_NOT_VERIFIED') {
+            setShowVerificationPrompt(true);
+            throw new Error('Please verify your email address before signing in. Check your inbox for the verification email.');
+          }
+          throw signInError;
         }
       } else {
         if (!displayName.trim()) {
           throw new Error('Please enter your name');
         }
-        await signUp(email, password, displayName);
-        navigate('/onboarding');
+        const user = await signUp(email, password, displayName);
+        
+        // Sign out user immediately after signup - they must verify email first
+        await auth.signOut();
+        
+        setSuccess('✅ Account created! Please check your email inbox or spam and then enter. A verification email has been sent to your email address. Please click the link in the email to verify your account and access the app.');
+        setIsLogin(true);
+        setEmail(email);
+        setPassword('');
+        setDisplayName('');
       }
     } catch (err: any) {
       console.error(err);
@@ -188,6 +267,19 @@ const Login: React.FC = () => {
     }
   };
 
+  const handleResendVerification = async () => {
+    setError('');
+    setResendingEmail(true);
+    try {
+      await resendVerificationEmail();
+      setSuccess('Verification email sent! Please check your inbox and spam folder.');
+    } catch (err: any) {
+      setError(err.message || 'Failed to send verification email. Please try again.');
+    } finally {
+      setResendingEmail(false);
+    }
+  };
+
   const handleGoogleSignIn = async () => {
     setError('');
     setLoading(true);
@@ -195,6 +287,7 @@ const Login: React.FC = () => {
     try {
       const user = await signInWithGoogle();
       
+      // Google accounts are automatically verified, so no check needed
       // Check if user needs onboarding (no college set means new user)
       const { doc, getDoc } = await import('firebase/firestore');
       const { db } = await import('../firebaseConfig');
@@ -238,6 +331,53 @@ const Login: React.FC = () => {
                 : 'Join your campus community'}
             </p>
           </div>
+
+          {/* Email Verification Prompt */}
+          {showVerificationPrompt && (
+            <div className="mb-6 p-4 bg-amber-50 border-2 border-amber-200 rounded-xl">
+              <div className="flex items-start gap-3">
+                <AlertCircle className="text-amber-600 flex-shrink-0 mt-0.5" size={20} />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-amber-900 text-sm mb-1">Email Verification Required</h3>
+                  <p className="text-amber-800 text-xs mb-3">
+                    Please verify your email address before signing in. Check your inbox for the verification email.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResendVerification}
+                      disabled={resendingEmail}
+                      className="px-4 py-2 bg-amber-600 text-white text-xs font-medium rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 flex items-center gap-2"
+                    >
+                      {resendingEmail ? (
+                        <>
+                          <Loader2 className="animate-spin" size={14} />
+                          Sending...
+                        </>
+                      ) : (
+                        <>
+                          <Mail size={14} />
+                          Resend Verification Email
+                        </>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowVerificationPrompt(false);
+                        auth.signOut();
+                        setEmail('');
+                        setPassword('');
+                      }}
+                      className="px-4 py-2 bg-white text-amber-700 text-xs font-medium rounded-lg border border-amber-300 hover:bg-amber-50 transition-colors"
+                    >
+                      Use Different Email
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleAuth} className="space-y-4">

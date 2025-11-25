@@ -271,7 +271,7 @@ const Marketplace: React.FC = () => {
                   </div>
                   {item.isSold && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                      <span className="bg-red-500 text-white px-4 py-2 rounded-lg font-bold">SOLD</span>
+                      <span className="bg-red-500 text-white px-2 md:px-4 py-1 md:py-2 rounded-lg font-bold text-xs md:text-sm">SOLD</span>
                     </div>
                   )}
                 </div>
@@ -446,21 +446,21 @@ const Marketplace: React.FC = () => {
 
       {/* Item Detail Modal */}
       {showDetailModal && selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] overflow-y-auto m-4 md:m-0">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-              <h2 className="text-xl font-bold text-slate-800">Item Details</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 md:p-4">
+          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[95vh] md:max-h-[90vh] overflow-y-auto">
+            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+              <h2 className="text-lg md:text-xl font-bold text-slate-800">Item Details</h2>
               <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X size={24}/>
               </button>
             </div>
-            <div className="p-6">
+            <div className="p-4 md:p-6">
               {/* Image Gallery */}
-              <div className="mb-6">
+              <div className="mb-4 md:mb-6">
                 <img 
                   src={selectedItem.images[0] || 'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=600'} 
                   alt={selectedItem.title} 
-                  className="w-full h-64 object-cover rounded-xl mb-3"
+                  className="w-full h-48 md:h-64 object-cover rounded-xl mb-3"
                 />
                 {selectedItem.images.length > 1 && (
                   <div className="grid grid-cols-4 gap-2">
@@ -474,28 +474,28 @@ const Marketplace: React.FC = () => {
               {/* Details */}
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-2xl font-bold text-slate-900 mb-2">{selectedItem.title}</h3>
-                  <div className="flex items-center gap-4 text-sm">
-                    <span className="px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full font-medium">{selectedItem.category}</span>
-                    <span className="px-3 py-1 bg-slate-100 text-slate-700 rounded-full">{selectedItem.condition}</span>
+                  <h3 className="text-lg md:text-2xl font-bold text-slate-900 mb-2 break-words">{selectedItem.title}</h3>
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    <span className="px-2 md:px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full font-medium text-xs md:text-sm">{selectedItem.category}</span>
+                    <span className="px-2 md:px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs md:text-sm">{selectedItem.condition}</span>
                     {selectedItem.isSold && (
-                      <span className="px-3 py-1 bg-red-50 text-red-600 rounded-full font-medium">SOLD</span>
+                      <span className="px-2 md:px-3 py-1 bg-red-50 text-red-600 rounded-full font-medium text-xs md:text-sm">SOLD</span>
                     )}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-xl">
+                <div className="flex items-center gap-3 p-3 md:p-4 bg-slate-50 rounded-xl">
                   <img 
                     src={selectedItem.sellerAvatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(selectedItem.sellerName)}`}
                     alt={selectedItem.sellerName}
-                    className="w-12 h-12 rounded-full"
+                    className="w-10 h-10 md:w-12 md:h-12 rounded-full flex-shrink-0"
                   />
-                  <div className="flex-1">
-                    <p className="text-sm text-slate-500">Seller</p>
-                    <p className="font-semibold text-slate-900">{selectedItem.sellerName}</p>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs md:text-sm text-slate-500">Seller</p>
+                    <p className="font-semibold text-slate-900 truncate text-sm md:text-base">{selectedItem.sellerName}</p>
                   </div>
-                  <div className="text-right">
-                    <p className="text-3xl font-bold text-primary">₹{selectedItem.price}</p>
+                  <div className="text-right flex-shrink-0">
+                    <p className="text-xl md:text-3xl font-bold text-primary">₹{selectedItem.price}</p>
                   </div>
                 </div>
 

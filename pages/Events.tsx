@@ -155,6 +155,7 @@ const Events: React.FC = () => {
   });
   const [customCollege, setCustomCollege] = useState('');
   const [eventCity, setEventCity] = useState('');
+  const [registrationFormLink, setRegistrationFormLink] = useState('');
 
   const fetchEvents = async (category?: string) => {
     setLoading(true);
@@ -445,6 +446,11 @@ const Events: React.FC = () => {
             attendees: 1,
         };
         
+        // Add registration form link if provided
+        if (registrationFormLink && registrationFormLink.trim()) {
+          eventData.registrationFormLink = registrationFormLink.trim();
+        }
+        
         // Only add location fields if they have values
         if (parsedCity || eventCity) {
           eventData.city = parsedCity || eventCity;
@@ -469,6 +475,7 @@ const Events: React.FC = () => {
         setImagePreview('');
         setEventCity('');
         setCustomCollege('');
+        setRegistrationFormLink('');
         setNewEvent({
             category: 'Academic',
             image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800'
@@ -693,18 +700,32 @@ const Events: React.FC = () => {
                     </div>
                     </div>
                     
-                    <div className="mt-4 pt-4 border-t border-slate-100 flex justify-between items-center">
-                    <span className="text-xs text-slate-500">By {eventWithDist.organizer || eventWithDist.hostName || 'Organizer'}</span>
-                    <button 
-                      onClick={() => handleToggleInterest(eventWithDist.id)}
-                      className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
-                        interestedEvents.has(eventWithDist.id)
-                          ? 'bg-green-600 text-white hover:bg-green-700'
-                          : 'bg-slate-900 text-white hover:bg-slate-800'
-                      }`}
-                    >
-                      {interestedEvents.has(eventWithDist.id) ? '✓ Going' : 'Interested'}
-                    </button>
+                    <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2">
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-500">By {eventWithDist.organizer || eventWithDist.hostName || 'Organizer'}</span>
+                        <button 
+                          onClick={() => handleToggleInterest(eventWithDist.id)}
+                          className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+                            interestedEvents.has(eventWithDist.id)
+                              ? 'bg-green-600 text-white hover:bg-green-700'
+                              : 'bg-slate-900 text-white hover:bg-slate-800'
+                          }`}
+                        >
+                          {interestedEvents.has(eventWithDist.id) ? '✓ Going' : 'Interested'}
+                        </button>
+                      </div>
+                      {(eventWithDist as any).registrationFormLink && (
+                        <a
+                          href={(eventWithDist as any).registrationFormLink}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="w-full px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors text-center flex items-center justify-center gap-2"
+                        >
+                          <Calendar size={16} />
+                          Register for Event
+                        </a>
+                      )}
                     </div>
                 </div>
                 </div>
@@ -730,6 +751,7 @@ const Events: React.FC = () => {
                         setCustomCollege('');
                         setImageFile(null);
                         setImagePreview('');
+                        setRegistrationFormLink('');
                       }} 
                       className="text-slate-400 hover:text-slate-600"
                     >
@@ -815,6 +837,21 @@ const Events: React.FC = () => {
                             <option value="Career">Career</option>
                             <option value="Arts">Arts</option>
                         </select>
+                    </div>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-700 mb-1">
+                          Registration Form Link <span className="text-slate-400 font-normal text-xs">(Optional)</span>
+                        </label>
+                        <input 
+                          type="url"
+                          className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base" 
+                          value={registrationFormLink}
+                          onChange={e => setRegistrationFormLink(e.target.value)}
+                          placeholder="https://forms.google.com/..."
+                        />
+                        <p className="text-xs text-slate-500 mt-1">
+                          Add a link to Google Forms, Typeform, or any registration form
+                        </p>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Event Cover Image</label>
