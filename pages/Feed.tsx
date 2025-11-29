@@ -3,9 +3,10 @@ import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Loade
 import { useNavigate } from 'react-router-dom';
 import { Post } from '../types';
 import Header from '../components/Header';
+import SuccessModal from '../components/SuccessModal';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
-import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, increment, getDoc, getDocs, deleteDoc, setDoc } from 'firebase/firestore';
+import { collection, addDoc, onSnapshot, query, orderBy, serverTimestamp, doc, updateDoc, increment, getDoc, getDocs, deleteDoc, setDoc, where } from 'firebase/firestore';
 import { uploadPostImages } from '../services/cloudinaryService';
 
 const Feed: React.FC = () => {
@@ -37,41 +38,76 @@ const Feed: React.FC = () => {
   const [location, setLocation] = useState<{name: string; latitude?: number; longitude?: number} | null>(null);
   const [attachmentFile, setAttachmentFile] = useState<File | null>(null);
   const [attachmentPreview, setAttachmentPreview] = useState<{name: string; type: string} | null>(null);
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const gifPickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Real-time listener for posts
+    // Real-time listener for posts - filtered by user's college
     let unsubscribe = () => {};
     
-    try {
-        // Check if DB is available
-        if (db) {
-            const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
-            unsubscribe = onSnapshot(q, (snapshot) => {
-            const fetchedPosts = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data()
-            } as Post));
-            setPosts(fetchedPosts);
-            setIsLoading(false);
-            }, (error) => {
-                console.error("Error fetching posts:", error);
-                setPosts([]);
-            });
-        } else {
-            setPosts([]);
+    const loadPosts = async () => {
+      if (!user || !db) {
+        setPosts([]);
+        setIsLoading(false);
+        return;
+      }
+
+      try {
+        // Get user's college from profile
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userCollege = userDoc.exists() ? userDoc.data()?.college : null;
+
+        if (!userCollege) {
+          console.warn('User college not found. Please complete your profile.');
+          setPosts([]);
+          setIsLoading(false);
+          return;
         }
-    } catch (e) {
+
+        // Ensure db is valid before creating query
+        if (!db) {
+          console.error('Firestore db is not initialized');
+          setPosts([]);
+          setIsLoading(false);
+          return;
+        }
+
+        // Filter posts by college
+        const postsRef = collection(db, "posts");
+        const q = query(
+          postsRef,
+          where("college", "==", userCollege),
+          orderBy("createdAt", "desc")
+        );
+        
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const fetchedPosts = snapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          } as Post));
+          setPosts(fetchedPosts);
+          setIsLoading(false);
+        }, (error) => {
+          console.error("Error fetching posts:", error);
+          setPosts([]);
+          setIsLoading(false);
+        });
+      } catch (e) {
         console.error("Feed Init Error:", e);
         setPosts([]);
-    }
+        setIsLoading(false);
+      }
+    };
+
+    loadPosts();
 
     return () => {
         if (unsubscribe) unsubscribe();
     };
-  }, []);
+  }, [user, db]);
 
   // Load user's liked posts on mount and when user/posts change
   useEffect(() => {
@@ -289,11 +325,16 @@ const Feed: React.FC = () => {
             console.error('Error fetching user college:', error);
           }
 
+          if (!userCollege) {
+            throw new Error('Please complete your profile with your college information before posting.');
+          }
+
           const postData: any = {
             authorId: user.uid,
             authorName: user.displayName || 'Student',
             authorAvatar: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'Student')}`,
             authorCollege: userCollege,
+            college: userCollege, // Add college field for filtering
             content: newPostText,
             imageUrls: imageUrls,
             likesCount: 0,
@@ -332,7 +373,8 @@ const Feed: React.FC = () => {
             }];
           }
 
-          await addDoc(collection(db, "posts"), postData);
+          const postsRef = collection(db, "posts");
+          await addDoc(postsRef, postData);
           
           // Reset all states
           setNewPostText('');
@@ -350,7 +392,8 @@ const Feed: React.FC = () => {
           setShowEmojiPicker(false);
           setShowGifPicker(false);
           
-          alert('Post created successfully!');
+          setSuccessMessage('Post created successfully! 🎉');
+          setShowSuccessModal(true);
       } else {
           throw new Error("DB Offline");
       }
@@ -437,6 +480,10 @@ const Feed: React.FC = () => {
       // Load comments if not already loaded
       if (!comments[postId] && db) {
         try {
+          if (!db) {
+            console.error('Firestore db is not initialized');
+            return;
+          }
           const commentsRef = collection(db, 'posts', postId, 'comments');
           const q = query(commentsRef, orderBy('createdAt', 'desc'));
           const snapshot = await getDocs(q);
@@ -465,7 +512,11 @@ const Feed: React.FC = () => {
       };
 
       // Add comment
-      await addDoc(collection(db, 'posts', postId, 'comments'), commentData);
+      if (!db) {
+        throw new Error('Firestore db is not initialized');
+      }
+      const commentsRef = collection(db, 'posts', postId, 'comments');
+      await addDoc(commentsRef, commentData);
       
       // Update comment count
       const postRef = doc(db, 'posts', postId);
@@ -480,7 +531,8 @@ const Feed: React.FC = () => {
       }));
 
       setNewComment('');
-      alert('Comment added!');
+      setSuccessMessage('Comment added!');
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Error adding comment:', error);
       alert('Failed to add comment');
@@ -1140,6 +1192,13 @@ const Feed: React.FC = () => {
             </div>
         )}
       </div>
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        message={successMessage}
+      />
     </div>
   );
 };

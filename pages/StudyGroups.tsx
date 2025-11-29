@@ -2,10 +2,11 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Send, Bot, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search, Smile, FileText, BarChart3, Video, File, Hash, MapPin, Download } from 'lucide-react';
 import { StudyGroup, ChatMessage } from '../types';
 import Header from '../components/Header';
+import SuccessModal from '../components/SuccessModal';
 import { generateStudyHelp } from '../services/geminiService';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit, getDocs, doc, updateDoc, increment, setDoc, getDoc } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit, getDocs, doc, updateDoc, increment, setDoc, getDoc, where } from 'firebase/firestore';
 import { uploadImageToCloudinary } from '../services/cloudinaryService';
 
 const StudyGroups: React.FC = () => {
@@ -42,6 +43,8 @@ const StudyGroups: React.FC = () => {
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showJoinRequestSuccess, setShowJoinRequestSuccess] = useState(false);
   const [userRole, setUserRole] = useState<Map<string, string>>(new Map());
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
 
@@ -83,8 +86,35 @@ const StudyGroups: React.FC = () => {
   const loadGroups = async () => {
     setLoading(true);
     try {
-      if (!db) throw new Error("DB unavailable");
-      const querySnapshot = await getDocs(collection(db, "groups"));
+      if (!db || !user) throw new Error("DB unavailable or user not logged in");
+      
+      // Get user's college from profile
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userCollege = userDoc.exists() ? userDoc.data()?.college : null;
+
+      if (!userCollege) {
+        console.warn('User college not found. Please complete your profile.');
+        setGroups([]);
+        setLoading(false);
+        return;
+      }
+
+      // Ensure db is valid before creating query
+      if (!db) {
+        console.error('Firestore db is not initialized');
+        setGroups([]);
+        setLoading(false);
+        return;
+      }
+
+      // Filter groups by user's college
+      const groupsRef = collection(db, "groups");
+      const q = query(
+        groupsRef,
+        where("college", "==", userCollege)
+      );
+      
+      const querySnapshot = await getDocs(q);
       
       // Calculate actual member count from members subcollection for each group
       const fetchedGroups = await Promise.all(
@@ -113,11 +143,7 @@ const StudyGroups: React.FC = () => {
         })
       );
       
-      if (fetchedGroups.length > 0) {
-        setGroups(fetchedGroups);
-      } else {
-        setGroups([]);
-      }
+      setGroups(fetchedGroups);
     } catch (err) {
       console.error(err);
       setGroups([]);
@@ -129,7 +155,24 @@ const StudyGroups: React.FC = () => {
   const loadMyGroups = async () => {
     if (!user || !db) return;
     try {
-      const groupsSnapshot = await getDocs(collection(db, 'groups'));
+      // Get user's college from profile
+      const userDoc = await getDoc(doc(db, 'users', user.uid));
+      const userCollege = userDoc.exists() ? userDoc.data()?.college : null;
+
+      if (!userCollege) {
+        setMyGroupIds(new Set());
+        setUserRole(new Map());
+        return;
+      }
+
+      // Filter groups by user's college
+      const groupsRef = collection(db, 'groups');
+      const q = query(
+        groupsRef,
+        where("college", "==", userCollege)
+      );
+      
+      const groupsSnapshot = await getDocs(q);
       const myIds = new Set<string>();
       const roles = new Map<string, string>();
       
@@ -371,8 +414,26 @@ const StudyGroups: React.FC = () => {
     }
 
     try {
-      const groupRef = await addDoc(collection(db, "groups"), {
+      // Get user's college from profile
+      let userCollege = '';
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          userCollege = userDoc.data()?.college || '';
+        }
+      } catch (error) {
+        console.error('Error fetching user college:', error);
+      }
+
+      if (!userCollege) {
+        alert('Please complete your profile with your college information before creating groups.');
+        return;
+      }
+
+      const groupsRef = collection(db, "groups");
+      const groupRef = await addDoc(groupsRef, {
         ...newGroup,
+        college: userCollege, // Add college field for filtering
         creatorId: user.uid,
         members: 1,
         createdAt: serverTimestamp()
@@ -390,7 +451,8 @@ const StudyGroups: React.FC = () => {
       setNewGroup({ name: '', subject: '', description: '', isPrivate: false });
       loadGroups();
       loadMyGroups();
-      alert('Group created successfully! 🎉');
+      setSuccessMessage('Group created successfully! 🎉');
+      setShowSuccessModal(true);
     } catch (error) {
       console.error(error);
       alert('Failed to create group');
@@ -474,7 +536,8 @@ const StudyGroups: React.FC = () => {
 
         setMyGroupIds(prev => new Set(prev).add(groupId));
         setShowJoinModal(false);
-        alert('Joined group successfully! 🎉');
+        setSuccessMessage('Joined group successfully! 🎉');
+        setShowSuccessModal(true);
         loadGroups();
       }
     } catch (error) {
@@ -1844,6 +1907,13 @@ const StudyGroups: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        message={successMessage}
+      />
     </div>
   );
 };

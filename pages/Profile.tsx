@@ -254,8 +254,8 @@ const Profile: React.FC = () => {
     try {
       let photoURL = profile.photoURL;
 
-      // Determine final college name
-      const finalCollege = editData.college === 'Other (Enter Your College)' ? editData.customCollege : editData.college;
+      // College cannot be changed - use existing college from profile
+      const finalCollege = profile.college;
 
       // Upload new avatar if selected (using Cloudinary - free!)
       if (avatarFile) {
@@ -553,32 +553,11 @@ const Profile: React.FC = () => {
                   
                   <div className="relative">
                     <GraduationCap className="absolute left-3 top-3 text-slate-400" size={18} />
-                    <select
-                      value={editData.college}
-                      onChange={(e) => setEditData({ ...editData, college: e.target.value, customCollege: '' })}
-                      className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none"
-                    >
-                      <option value="">Select your college...</option>
-                      {POPULAR_COLLEGES.map((college) => (
-                        <option key={college} value={college}>
-                          {college}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {editData.college === 'Other (Enter Your College)' && (
-                    <div className="relative">
-                      <GraduationCap className="absolute left-3 top-3 text-slate-400" size={18} />
-                      <input
-                        type="text"
-                        value={editData.customCollege}
-                        onChange={(e) => setEditData({ ...editData, customCollege: e.target.value })}
-                        placeholder="Enter your college name"
-                        className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
+                    <div className="w-full pl-10 pr-4 py-3 bg-slate-100 rounded-xl border border-slate-200 text-slate-600 flex items-center">
+                      {editData.college === 'Other (Enter Your College)' ? editData.customCollege : editData.college || 'Not set'}
+                      <span className="ml-2 text-xs text-slate-400">(Cannot be changed)</span>
                     </div>
-                  )}
+                  </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="relative">

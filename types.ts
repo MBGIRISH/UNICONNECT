@@ -38,6 +38,7 @@ export interface Post {
   authorName: string;
   authorAvatar?: string;
   authorCollege?: string; // NEW: Author's college
+  college?: string; // College field for filtering (matches user's college)
   content: string;
   imageUrls?: string[];
   groupId?: string; // If posted in a group
@@ -162,6 +163,7 @@ export interface JoinRequest {
 
 export interface StudyGroup extends Group {
   subject?: string;
+  college?: string; // College field for filtering (matches user's college)
 }
 
 export interface ChatMessage {
@@ -198,6 +200,7 @@ export interface MarketplaceListing {
   sellerId: string;
   sellerName: string;
   sellerAvatar?: string;
+  college?: string; // College field for filtering (matches user's college)
   condition: 'New' | 'Like New' | 'Good' | 'Fair' | 'Poor';
   category: 'Books' | 'Electronics' | 'Furniture' | 'Clothing' | 'Sports' | 'Other';
   isSold: boolean;

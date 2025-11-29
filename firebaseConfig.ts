@@ -21,7 +21,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 
 // Initialize Firestore with error handling
-let db;
+let db: ReturnType<typeof getFirestore> | undefined;
 try {
   db = getFirestore(app);
   console.log('✅ Firestore initialized');
@@ -44,9 +44,12 @@ try {
   } catch (e: any) {
     console.error('❌ Firestore failed to initialize:', e);
     console.error('Please enable Firestore in Firebase Console and refresh the page.');
-    // Don't throw - allow app to continue (it will show errors in components)
+    db = undefined; // Explicitly set to undefined on failure
   }
 }
+
+// Export db - components should check if it's defined before using
+export { db, auth, storage, googleProvider };
 
 const auth = getAuth(app);
 
@@ -62,5 +65,3 @@ try {
 }
 
 const googleProvider = new GoogleAuthProvider();
-
-export { db, auth, storage, googleProvider };

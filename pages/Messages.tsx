@@ -329,7 +329,7 @@ const Messages: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen md:h-screen bg-white overflow-hidden pb-20 md:pb-0">
+    <div className="flex flex-col h-screen md:h-screen bg-white overflow-hidden pb-20 md:pb-0 max-w-full">
       {/* Chat Header */}
       <div className="p-3 sm:p-4 border-b border-slate-200 flex items-center gap-2 sm:gap-3 bg-white sticky top-0 z-10 flex-shrink-0">
         <button 
@@ -350,20 +350,21 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 sm:space-y-4 bg-slate-50 min-h-0" style={{ maxHeight: 'calc(100vh - 180px)' }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-3 sm:space-y-4 bg-slate-50 min-h-0" style={{ maxHeight: 'calc(100vh - 180px)', width: '100%' }}>
         {messages.map((msg) => {
           const isMine = msg.senderId === currentUser?.uid;
           return (
             <div 
               key={msg.id}
-              className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}
+              className={`flex ${isMine ? 'justify-end' : 'justify-start'} w-full max-w-full`}
             >
-              <div className={`max-w-[85%] sm:max-w-[70%] ${isMine ? 'order-2' : 'order-1'}`}>
+              <div className={`max-w-[85%] sm:max-w-[70%] min-w-0 message-container ${isMine ? 'order-2' : 'order-1'}`} style={{ maxWidth: '85%' }}>
                 {msg.imageUrl && (
                   <img 
                     src={msg.imageUrl}
                     alt="Shared"
-                    className="rounded-lg mb-1 max-h-48 sm:max-h-64 w-auto"
+                    className="rounded-lg mb-1 max-h-48 sm:max-h-64 w-full h-auto object-contain"
+                    style={{ maxWidth: '100%' }}
                   />
                 )}
                 {msg.text && (
@@ -371,11 +372,11 @@ const Messages: React.FC = () => {
                     isMine 
                       ? 'bg-primary text-white' 
                       : 'bg-white text-slate-900 border border-slate-200'
-                  }`}>
-                    <p className="break-words">{msg.text}</p>
+                  }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
+                    <p style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{msg.text}</p>
                   </div>
                 )}
-                <p className="text-xs text-slate-400 mt-1 px-2">
+                <p className="text-xs text-slate-400 mt-1 px-2 break-words">
                   {msg.createdAt?.toDate?.().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'Just now'}
                 </p>
               </div>
@@ -386,8 +387,8 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Input - Sticky at bottom with safe area padding, above mobile nav */}
-      <div className="p-3 sm:p-4 border-t border-slate-200 bg-white fixed md:sticky bottom-20 md:bottom-0 left-0 right-0 z-10 flex-shrink-0 pb-safe md:pb-0">
-        <div className="flex items-center gap-2">
+      <div className="p-3 sm:p-4 border-t border-slate-200 bg-white fixed md:sticky bottom-20 md:bottom-0 left-0 right-0 z-10 flex-shrink-0 pb-safe md:pb-0 max-w-full">
+        <div className="flex items-center gap-2 w-full">
           <input
             type="file"
             ref={fileInputRef}
@@ -409,7 +410,7 @@ const Messages: React.FC = () => {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Type a message..."
-            className="flex-1 px-3 py-2 sm:px-4 sm:py-2 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm sm:text-base"
+            className="flex-1 min-w-0 px-3 py-2 sm:px-4 sm:py-2 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm sm:text-base"
           />
           <button
             onClick={handleSendMessage}

@@ -52,6 +52,16 @@
       .pb-safe {
         padding-bottom: env(safe-area-inset-bottom);
       }
+      /* Prevent message overflow on mobile */
+      .message-container {
+        max-width: 100%;
+        overflow-wrap: anywhere;
+        word-break: break-word;
+      }
+      /* Prevent horizontal scrolling */
+      body {
+        overflow-x: hidden;
+      }
     </style>
   <script type="importmap">
 {

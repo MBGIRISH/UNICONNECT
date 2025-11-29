@@ -2,9 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { Tag, Filter, Plus, X, Loader2, Upload, MessageCircle, DollarSign, Package, ArrowLeft, Send, Image as ImageIcon } from 'lucide-react';
 import { MarketplaceListing } from '../types';
 import Header from '../components/Header';
+import SuccessModal from '../components/SuccessModal';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
-import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, onSnapshot, doc, updateDoc, getDoc, where } from 'firebase/firestore';
 import { uploadMarketplaceImages } from '../services/cloudinaryService';
 
 const Marketplace: React.FC = () => {
@@ -19,6 +20,8 @@ const Marketplace: React.FC = () => {
   const [uploading, setUploading] = useState(false);
   const [messages, setMessages] = useState<any[]>([]);
   const [newMessage, setNewMessage] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   const { user } = useAuth();
   
   const [newItem, setNewItem] = useState({
@@ -32,19 +35,46 @@ const Marketplace: React.FC = () => {
   const fetchItems = async () => {
     setLoading(true);
     try {
-        if (!db) throw new Error("DB unavailable");
-        const snapshot = await getDocs(collection(db, "marketplace"));
+        if (!db || !user) {
+          setItems([]);
+          setLoading(false);
+          return;
+        }
+        
+        // Get user's college from profile
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userCollege = userDoc.exists() ? userDoc.data()?.college : null;
+
+        if (!userCollege) {
+          console.warn('User college not found. Please complete your profile.');
+          setItems([]);
+          setLoading(false);
+          return;
+        }
+
+        // Ensure db is valid before creating query
+        if (!db) {
+          console.error('Firestore db is not initialized');
+          setItems([]);
+          setLoading(false);
+          return;
+        }
+
+        // Filter items by user's college
+        const marketplaceRef = collection(db, "marketplace");
+        const q = query(
+          marketplaceRef,
+          where("college", "==", userCollege)
+        );
+        
+        const snapshot = await getDocs(q);
         const fetchedItems = snapshot.docs.map(doc => ({
           id: doc.id, 
           ...doc.data(),
           createdAt: doc.data().createdAt?.toDate() || new Date()
         } as MarketplaceListing));
         
-        if (fetchedItems.length > 0) {
-          setItems(fetchedItems);
-        } else {
-          setItems([]);
-        }
+        setItems(fetchedItems);
     } catch (e) {
         console.error("Error fetching marketplace items:", e);
         setItems([]);
@@ -126,9 +156,27 @@ const Marketplace: React.FC = () => {
         imageUrls = await uploadMarketplaceImages(listingId, imageFiles);
       }
 
-      if (!db) throw new Error("DB unavailable");
+      if (!db) {
+        throw new Error("DB unavailable");
+      }
       
-      await addDoc(collection(db, "marketplace"), {
+      // Get user's college from profile
+      let userCollege = '';
+      try {
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        if (userDoc.exists()) {
+          userCollege = userDoc.data()?.college || '';
+        }
+      } catch (error) {
+        console.error('Error fetching user college:', error);
+      }
+
+      if (!userCollege) {
+        throw new Error('Please complete your profile with your college information before listing items.');
+      }
+      
+      const marketplaceRef = collection(db, "marketplace");
+      await addDoc(marketplaceRef, {
         title: newItem.title,
         description: newItem.description,
         price: Number(newItem.price),
@@ -138,6 +186,7 @@ const Marketplace: React.FC = () => {
         sellerId: user.uid,
         sellerName: user.displayName || 'User',
         sellerAvatar: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}`,
+        college: userCollege, // Add college field for filtering
         isSold: false,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
@@ -148,7 +197,8 @@ const Marketplace: React.FC = () => {
       setImageFiles([]);
       setImagePreviews([]);
       fetchItems();
-      alert('Item listed successfully! 🎉');
+      setSuccessMessage('Item listed successfully! 🎉');
+      setShowSuccessModal(true);
     } catch (e: any) {
       console.error(e);
       alert(e.message || 'Failed to list item');
@@ -207,7 +257,8 @@ const Marketplace: React.FC = () => {
 
       setShowDetailModal(false);
       fetchItems();
-      alert('Item marked as sold! 🎉');
+      setSuccessMessage('Item marked as sold! 🎉');
+      setShowSuccessModal(true);
     } catch (error) {
       console.error(error);
       alert('Failed to update item');
@@ -601,6 +652,13 @@ const Marketplace: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        message={successMessage}
+      />
     </div>
   );
 };

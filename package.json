@@ -8,9 +8,19 @@
     "build": "vite build",
     "preview": "vite preview",
     "init-db": "npx tsx initFirebase.ts",
-    "cleanup-test-data": "npx tsx scripts/cleanup-test-data.ts"
+    "cleanup-test-data": "npx tsx scripts/cleanup-test-data.ts",
+    "cap:add": "npx cap add",
+    "cap:sync": "npx cap sync",
+    "cap:open": "npx cap open",
+    "cap:open:android": "npx cap open android",
+    "cap:open:ios": "npx cap open ios",
+    "cap:build": "npm run build && npx cap sync"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/ios": "^7.4.4",
     "@emailjs/browser": "^4.4.1",
     "@google/generative-ai": "^0.21.0",
     "firebase": "^10.8.0",

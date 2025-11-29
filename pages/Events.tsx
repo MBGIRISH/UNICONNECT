@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { MapPin, Calendar, Clock, Users, Plus, X, Loader2, Upload, GraduationCap, Map, Filter, Navigation } from 'lucide-react';
 import { Event } from '../types';
 import Header from '../components/Header';
+import SuccessModal from '../components/SuccessModal';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
 import { collection, getDocs, addDoc, query, where, doc, updateDoc, increment, setDoc, deleteDoc, getDoc } from 'firebase/firestore';
@@ -153,20 +154,49 @@ const Events: React.FC = () => {
     category: 'Academic',
     image: 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800'
   });
-  const [customCollege, setCustomCollege] = useState('');
   const [eventCity, setEventCity] = useState('');
   const [registrationFormLink, setRegistrationFormLink] = useState('');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
 
   const fetchEvents = async (category?: string) => {
     setLoading(true);
     try {
-        if (!db) throw new Error("DB unavailable");
+        if (!db || !user) throw new Error("DB unavailable or user not logged in");
         
+        // Get user's college from profile
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userCollege = userDoc.exists() ? userDoc.data()?.college : null;
+
+        if (!userCollege) {
+          console.warn('User college not found. Please complete your profile.');
+          setEvents([]);
+          setLoading(false);
+          return;
+        }
+
+        // Ensure db is valid before creating query
+        if (!db) {
+          console.error('Firestore db is not initialized');
+          setEvents([]);
+          setLoading(false);
+          return;
+        }
+
+        // Filter events by user's college
+        const eventsRef = collection(db, "events");
         let q;
         if (category && category !== 'All') {
-          q = query(collection(db, "events"), where("category", "==", category));
+          q = query(
+            eventsRef,
+            where("college", "==", userCollege),
+            where("category", "==", category)
+          );
         } else {
-          q = collection(db, "events");
+          q = query(
+            eventsRef,
+            where("college", "==", userCollege)
+          );
         }
         
         const querySnapshot = await getDocs(q);
@@ -175,11 +205,7 @@ const Events: React.FC = () => {
             ...doc.data()
         } as Event));
         
-        if (fetchedEvents.length > 0) {
-            setEvents(fetchedEvents);
-        } else {
-            throw new Error("No events");
-        }
+        setEvents(fetchedEvents);
     } catch (err) {
         // No fallback mock data - only show real events from Firestore
         setEvents([]);
@@ -352,7 +378,8 @@ const Events: React.FC = () => {
           e.id === eventId ? { ...e, attendees: (e.attendees || 0) + 1 } : e
         ));
         
-        alert('RSVP confirmed! 🎉');
+        setSuccessMessage('RSVP confirmed! 🎉');
+        setShowSuccessModal(true);
       }
     } catch (error) {
       console.error('Error toggling interest:', error);
@@ -388,6 +415,21 @@ const Events: React.FC = () => {
 
     setUploading(true);
     try {
+        // Get user's college from profile (required)
+        let userCollege = '';
+        try {
+          const userDoc = await getDoc(doc(db, 'users', user.uid));
+          if (userDoc.exists()) {
+            userCollege = userDoc.data()?.college || '';
+          }
+        } catch (error) {
+          console.error('Error fetching user college:', error);
+        }
+
+        if (!userCollege) {
+          throw new Error('Please complete your profile with your college information before creating events.');
+        }
+
         let coverImageUrl = newEvent.image || 'https://images.unsplash.com/photo-1540575467063-178a50c2df87?w=800';
         
         // Upload image to Cloudinary if present
@@ -404,8 +446,8 @@ const Events: React.FC = () => {
           }
         }
 
-        // Determine final college name
-        const finalCollege = newEvent.college === 'Other (Enter Your College)' ? customCollege : newEvent.college;
+        // Use user's college from profile (not from form)
+        const finalCollege = userCollege;
 
         // Parse location input (can be city name, coordinates, or Google Maps URL)
         let eventLat: number | undefined;
@@ -440,7 +482,7 @@ const Events: React.FC = () => {
         // Build event data object, only including defined values
         const eventData: any = {
             ...newEvent,
-            college: finalCollege || null,
+            college: finalCollege, // Always use user's college from profile
             image: coverImageUrl,
             organizer: user.displayName || 'Student',
             attendees: 1,
@@ -467,14 +509,14 @@ const Events: React.FC = () => {
           eventData.longitude = eventLon;
         }
         
-        await addDoc(collection(db, "events"), eventData);
+        const eventsRef = collection(db, "events");
+        await addDoc(eventsRef, eventData);
         
         console.log('Event created successfully!');
         setShowModal(false);
         setImageFile(null);
         setImagePreview('');
         setEventCity('');
-        setCustomCollege('');
         setRegistrationFormLink('');
         setNewEvent({
             category: 'Academic',
@@ -482,7 +524,8 @@ const Events: React.FC = () => {
         });
         fetchEvents(selectedCategory);
         fetchEvents(selectedCategory);
-        alert('Event created successfully! 🎉');
+        setSuccessMessage('Event created successfully! 🎉');
+        setShowSuccessModal(true);
     } catch (error: any) {
         console.error('Error creating event:', error);
         let errorMessage = 'Failed to create event. ';
@@ -748,7 +791,6 @@ const Events: React.FC = () => {
                       onClick={() => {
                         setShowModal(false);
                         setEventCity('');
-                        setCustomCollege('');
                         setImageFile(null);
                         setImagePreview('');
                         setRegistrationFormLink('');
@@ -794,36 +836,10 @@ const Events: React.FC = () => {
                           Enter city name or paste Google Maps link to auto-extract location
                         </p>
                     </div>
-                    <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">College/University</label>
-                        <select 
-                          className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base"
-                          value={newEvent.college || ''}
-                          onChange={e => {
-                            setNewEvent({...newEvent, college: e.target.value});
-                            if (e.target.value !== 'Other (Enter Your College)') setCustomCollege('');
-                          }}
-                        >
-                          <option value="">Select college...</option>
-                          {POPULAR_COLLEGES.map((college) => (
-                            <option key={college} value={college}>
-                              {college}
-                            </option>
-                          ))}
-                        </select>
+                    <div className="bg-indigo-50 border border-indigo-200 rounded-xl p-4 text-sm text-indigo-800">
+                      <p className="font-medium mb-1">🎓 College</p>
+                      <p className="text-xs text-indigo-700">Events will be automatically associated with your college from your profile.</p>
                     </div>
-                    {newEvent.college === 'Other (Enter Your College)' && (
-                      <div>
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Custom College Name</label>
-                        <input 
-                          required 
-                          className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base" 
-                          value={customCollege}
-                          onChange={e => setCustomCollege(e.target.value)}
-                          placeholder="Enter college name"
-                        />
-                      </div>
-                    )}
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                         <select 
@@ -901,6 +917,13 @@ const Events: React.FC = () => {
             </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        message={successMessage}
+      />
     </div>
   );
 };

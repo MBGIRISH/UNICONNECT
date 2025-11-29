@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, Upload, Download, Search, Filter, X, Loader2, Calendar, User, BookOpen } from 'lucide-react';
 import Header from '../components/Header';
+import SuccessModal from '../components/SuccessModal';
 import { useAuth } from '../App';
 import { db } from '../firebaseConfig';
 import { 
@@ -11,7 +12,8 @@ import {
   onSnapshot, 
   serverTimestamp,
   doc,
-  getDoc
+  getDoc,
+  where
 } from 'firebase/firestore';
 
 interface Resource {
@@ -25,6 +27,7 @@ interface Resource {
   year: string;
   subject: string;
   moduleNumber?: string; // Module number (e.g., "Module 1", "Unit 3")
+  college?: string; // College name for filtering
   uploadedBy: string;
   uploaderName: string;
   uploaderPhoto?: string;
@@ -43,6 +46,8 @@ const Resources: React.FC = () => {
   const [selectedDepartment, setSelectedDepartment] = useState('All');
   const [selectedYear, setSelectedYear] = useState('All');
   const [selectedModule, setSelectedModule] = useState('All');
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [successMessage, setSuccessMessage] = useState('');
   
   // Upload form state
   const [title, setTitle] = useState('');
@@ -83,26 +88,75 @@ const Resources: React.FC = () => {
   const years = ['All', '1st Year', '2nd Year', '3rd Year', '4th Year'];
   const modules = ['All', 'Module 1', 'Module 2', 'Module 3', 'Module 4', 'Module 5'];
 
-  // Fetch resources
+  // Fetch resources - filtered by user's college
   useEffect(() => {
-    const q = query(collection(db, 'resources'), orderBy('createdAt', 'desc'));
-    
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const resourcesData = snapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      })) as Resource[];
-      
-      setResources(resourcesData);
-      setFilteredResources(resourcesData);
+    if (!user || !db) {
+      setResources([]);
+      setFilteredResources([]);
       setLoading(false);
-    }, (error) => {
-      console.error('Error fetching resources:', error);
-      setLoading(false);
-    });
+      return;
+    }
 
-    return () => unsubscribe();
-  }, []);
+    let unsubscribe = () => {};
+
+    const loadResources = async () => {
+      try {
+        // Ensure db is valid
+        if (!db) {
+          console.error('Firestore db is not initialized');
+          setResources([]);
+          setFilteredResources([]);
+          setLoading(false);
+          return;
+        }
+
+        // Get user's college from profile
+        const userDoc = await getDoc(doc(db, 'users', user.uid));
+        const userCollege = userDoc.exists() ? userDoc.data()?.college : null;
+
+        if (!userCollege) {
+          console.warn('User college not found. Please complete your profile.');
+          setResources([]);
+          setFilteredResources([]);
+          setLoading(false);
+          return;
+        }
+
+        // Filter resources by user's college
+        const resourcesRef = collection(db, 'resources');
+        const q = query(
+          resourcesRef,
+          where('college', '==', userCollege),
+          orderBy('createdAt', 'desc')
+        );
+        
+        unsubscribe = onSnapshot(q, (snapshot) => {
+          const resourcesData = snapshot.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          })) as Resource[];
+          
+          setResources(resourcesData);
+          setFilteredResources(resourcesData);
+          setLoading(false);
+        }, (error) => {
+          console.error('Error fetching resources:', error);
+          setLoading(false);
+        });
+      } catch (error) {
+        console.error('Error loading resources:', error);
+        setResources([]);
+        setFilteredResources([]);
+        setLoading(false);
+      }
+    };
+
+    loadResources();
+
+    return () => {
+      if (unsubscribe) unsubscribe();
+    };
+  }, [user, db]);
 
   // Filter resources
   useEffect(() => {
@@ -171,16 +225,22 @@ const Resources: React.FC = () => {
         throw new Error('You must be logged in to upload resources');
       }
 
-      // Get user profile for uploader info
+      // Get user profile for uploader info and college
       let userData: any = null;
+      let userCollege = '';
       try {
         const userDoc = await getDoc(doc(db, 'users', user.uid));
         if (userDoc.exists()) {
           userData = userDoc.data();
+          userCollege = userData.college || '';
         }
       } catch (userError) {
         console.warn('Could not fetch user data:', userError);
         // Continue with default values
+      }
+
+      if (!userCollege) {
+        throw new Error('Please complete your profile with your college information before uploading resources.');
       }
 
       // Upload all files to Cloudinary
@@ -245,7 +305,8 @@ const Resources: React.FC = () => {
           ? `${title} (${result.fileName})` 
           : title;
 
-        return addDoc(collection(db, 'resources'), {
+        const resourcesRef = collection(db, 'resources');
+        return addDoc(resourcesRef, {
           title: resourceTitle,
           description,
           fileUrl: result.fileUrl,
@@ -255,6 +316,7 @@ const Resources: React.FC = () => {
           year,
           subject,
           moduleNumber: moduleNumber || undefined,
+          college: userCollege, // Add college field for filtering
           uploadedBy: user.uid,
           uploaderName: userData?.displayName || user.displayName || 'Anonymous',
           uploaderPhoto: userData?.photoURL || user.photoURL || '',
@@ -276,7 +338,8 @@ const Resources: React.FC = () => {
       setModuleNumber('');
       setFiles([]);
       setShowUploadModal(false);
-      alert(`Successfully uploaded ${files.length} resource(s)! 🎉`);
+      setSuccessMessage(`Successfully uploaded ${files.length} resource(s)! 🎉`);
+      setShowSuccessModal(true);
     } catch (error: any) {
       console.error('Error uploading resource:', error);
       const errorMessage = error.message || 'Failed to upload resource. Please try again.';
@@ -719,6 +782,13 @@ const Resources: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Success Modal */}
+      <SuccessModal
+        isOpen={showSuccessModal}
+        onClose={() => setShowSuccessModal(false)}
+        message={successMessage}
+      />
     </div>
   );
 };

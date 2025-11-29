@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+release.keystore
+*.keystore
+android/app/release.keystore
