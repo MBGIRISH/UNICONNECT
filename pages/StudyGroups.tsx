@@ -1279,23 +1279,29 @@ const StudyGroups: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-white md:ml-64 relative z-0 w-full max-w-full overflow-hidden">
       {/* Chat Header */}
-      <div className="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-white shadow-sm z-10">
-        <div className="flex items-center gap-3">
-          <button onClick={() => setSelectedGroup(null)} className="p-2 -ml-1 text-slate-500 hover:bg-slate-100 rounded-full touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Back">
-            <ArrowLeft size={20} />
+      <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-200 flex justify-between items-center bg-white shadow-sm z-10 w-full max-w-full safe-top">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+          <button 
+            onClick={() => setSelectedGroup(null)} 
+            className="p-1.5 sm:p-2 -ml-1 text-slate-500 hover:bg-slate-100 rounded-full touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center flex-shrink-0" 
+            aria-label="Back"
+          >
+            <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
           </button>
-          <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
-            <Users size={20} />
+          <div className="w-9 h-9 sm:w-10 sm:h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center flex-shrink-0">
+            <Users size={18} className="sm:w-5 sm:h-5" />
           </div>
-          <div>
-            <h3 className="font-bold text-slate-900 text-sm md:text-base leading-tight">{selectedGroup.name}</h3>
+          <div className="min-w-0 flex-1">
+            <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-tight truncate">{selectedGroup.name}</h3>
             <div className="flex items-center gap-1">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-              <p className="text-[10px] text-slate-500">{selectedGroup.memberCount || 0} members • AI Active</p>
+              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></span>
+              <p className="text-[10px] sm:text-xs text-slate-500 truncate">{selectedGroup.memberCount || 0} members • AI Active</p>
             </div>
           </div>
         </div>
-        <MoreVertical className="text-slate-400" size={20} />
+        <button className="p-2 text-slate-400 hover:bg-slate-100 rounded-full touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center flex-shrink-0" aria-label="More options">
+          <MoreVertical size={18} className="sm:w-5 sm:h-5" />
+        </button>
       </div>
 
       {/* Join Requests Banner (for owners/admins) */}
@@ -1319,7 +1325,7 @@ const StudyGroups: React.FC = () => {
       )}
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-4 bg-slate-50 pb-20 md:pb-4">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-50 pb-32 md:pb-4 w-full max-w-full">
         {messages.length === 0 && (
           <div className="text-center text-slate-400 text-sm mt-10">
             <Bot size={48} className="mx-auto text-indigo-300 mb-3" />
@@ -1488,40 +1494,62 @@ const StudyGroups: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Image Preview */}
-      {imagePreview && (
-        <div className="px-4 py-2 bg-white border-t border-slate-200">
-          <div className="relative inline-block">
-            <img src={imagePreview} alt="Preview" className="h-20 rounded-lg" />
-            <button 
-              onClick={() => {
-                setImageFile(null);
-                setImagePreview('');
-              }}
-              className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
-            >
-              <X size={14} />
-            </button>
+        {/* Image Preview */}
+        {imagePreview && (
+          <div className="px-3 sm:px-4 py-2 bg-white border-t border-slate-200 w-full max-w-full">
+            <div className="relative inline-block">
+              <img src={imagePreview} alt="Preview" className="h-20 rounded-lg max-w-full" />
+              <button 
+                onClick={() => {
+                  setImageFile(null);
+                  setImagePreview('');
+                }}
+                className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 touch-manipulation min-w-[28px] min-h-[28px] flex items-center justify-center"
+                aria-label="Remove image"
+              >
+                <X size={14} />
+              </button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Input Area - Sticky at bottom on mobile */}
-      <div className="sticky bottom-0 bg-white border-t border-slate-200 p-3 sm:p-4 pb-safe md:pb-4 z-20 shadow-lg md:shadow-none">
-        <textarea
+      {/* Input Area - Fixed at bottom on mobile, sticky on desktop */}
+      <div className="fixed md:sticky bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 sm:p-4 pb-safe md:pb-4 z-20 shadow-lg md:shadow-none w-full max-w-full">
+        {/* Text Input */}
+        <div className="flex items-end gap-2 sm:gap-3 mb-2">
+          <textarea
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
-          placeholder="Type a message..."
-          className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none touch-manipulation mb-2"
-          rows={2}
-        />
+            placeholder="Type a message..."
+            className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none touch-manipulation min-h-[44px] max-h-32"
+            rows={1}
+            style={{ maxWidth: '100%' }}
+          />
+          {/* Send Button - Next to textarea on mobile */}
+          <button 
+            onClick={handleSendMessage}
+            disabled={(!messageText.trim() && !selectedGif && !imageFile && !pollQuestion && !attachmentFile) || uploading}
+            className="bg-primary hover:bg-indigo-700 text-white p-2.5 sm:p-3 rounded-full font-semibold transition-colors disabled:opacity-50 flex items-center justify-center touch-manipulation flex-shrink-0 shadow-sm min-w-[44px] min-h-[44px] sm:min-w-[60px] sm:px-4"
+            aria-label="Send message"
+          >
+            {uploading ? (
+              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+            ) : (
+              <Send size={18} className="sm:w-5 sm:h-5" />
+            )}
+          </button>
+        </div>
 
         {/* Poll Creator */}
         {showPollCreator && (
-          <div className="mt-3 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="mb-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-semibold text-sm text-slate-700">Create Poll</h4>
-              <button onClick={() => setShowPollCreator(false)} className="text-slate-400 hover:text-slate-600">
+              <button 
+                onClick={() => setShowPollCreator(false)} 
+                className="text-slate-400 hover:text-slate-600 touch-manipulation p-1 min-w-[32px] min-h-[32px] flex items-center justify-center"
+                aria-label="Close poll creator"
+              >
                 <X size={16} />
               </button>
             </div>
@@ -1530,7 +1558,7 @@ const StudyGroups: React.FC = () => {
               placeholder="Poll question..."
               value={pollQuestion}
               onChange={(e) => setPollQuestion(e.target.value)}
-              className="w-full px-3 py-2 mb-2 bg-white rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              className="w-full px-3 py-2 mb-2 bg-white rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 touch-manipulation"
             />
             <div className="space-y-2">
               {pollOptions.map((option, index) => (
@@ -1544,12 +1572,13 @@ const StudyGroups: React.FC = () => {
                       newOptions[index] = e.target.value;
                       setPollOptions(newOptions);
                     }}
-                    className="flex-1 px-3 py-2 bg-white rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                    className="flex-1 px-3 py-2 bg-white rounded-lg border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 touch-manipulation min-w-0"
                   />
                   {pollOptions.length > 2 && (
                     <button
                       onClick={() => removePollOption(index)}
-                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg"
+                      className="p-2 text-red-500 hover:bg-red-50 rounded-lg touch-manipulation min-w-[36px] min-h-[36px] flex items-center justify-center"
+                      aria-label="Remove option"
                     >
                       <X size={16} />
                     </button>
@@ -1558,195 +1587,174 @@ const StudyGroups: React.FC = () => {
               ))}
             </div>
             {pollOptions.length < 4 && (
-              <button onClick={addPollOption} className="text-sm text-primary hover:underline mt-2">
+              <button 
+                onClick={addPollOption} 
+                className="text-sm text-primary hover:underline mt-2 touch-manipulation py-1"
+              >
                 + Add Option
               </button>
             )}
           </div>
         )}
 
-        <div className="border-t border-slate-100 pt-2 mt-2">
-          {/* Icons Row + Send Button - Same line */}
-          <div className="flex items-center gap-2 sm:gap-3">
-            {/* Icons Row - Scrollable on mobile */}
-            <div className="flex gap-1.5 sm:gap-2 overflow-x-auto hide-scrollbar flex-1 min-w-0 pb-1">
-              {/* Emoji Picker */}
-              <div className="relative flex-shrink-0">
-                <button
-                  onClick={() => {
-                    setShowEmojiPicker(!showEmojiPicker);
-                    setShowGifPicker(false);
-                  }}
-                  className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
-                  title="Add Emoji"
-                  aria-label="Add Emoji"
-                >
-                  <Smile size={18} className="sm:w-5 sm:h-5" />
-                </button>
-              {showEmojiPicker && (
-                <div
-                  ref={emojiPickerRef}
-                  className="fixed sm:absolute bottom-20 sm:bottom-full left-2 sm:left-0 mb-2 sm:mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
-                  style={{ width: 'min(280px, calc(100vw - 1rem))' }}
-                >
-                  <div className="grid grid-cols-5 gap-2">
-                    {emojis.map((emoji, index) => (
-                      <button
-                        key={index}
-                        onClick={() => {
-                          setMessageText(prev => prev + emoji);
-                          setShowEmojiPicker(false);
-                        }}
-                        className="text-xl sm:text-2xl hover:bg-slate-50 rounded-lg p-1.5 sm:p-2 transition-colors touch-manipulation"
-                      >
-                        {emoji}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* GIF Picker */}
-            <div className="relative flex-shrink-0">
-              <button
-                onClick={() => {
-                  setShowGifPicker(!showGifPicker);
-                  setShowEmojiPicker(false);
-                  if (!showGifPicker) {
-                    searchGifs('trending');
-                  }
-                }}
-                className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
-                title="Add GIF"
-                aria-label="Add GIF"
-              >
-                <ImageIcon size={18} className="sm:w-5 sm:h-5" />
-              </button>
-              {showGifPicker && (
-                <div
-                  ref={gifPickerRef}
-                  className="fixed sm:absolute bottom-20 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
-                  style={{ width: 'min(320px, calc(100vw - 1rem))', maxHeight: '400px' }}
-                >
-                  <input
-                    type="text"
-                    placeholder="Search GIFs..."
-                    value={gifSearchTerm}
-                    onChange={(e) => {
-                      setGifSearchTerm(e.target.value);
-                      searchGifs(e.target.value);
-                    }}
-                    className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                  />
-                  <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-                    {gifResults.map((gif: any) => (
-                      <button
-                        key={gif.id}
-                        onClick={() => {
-                          setSelectedGif(gif.images.fixed_height.url);
-                          setShowGifPicker(false);
-                        }}
-                        className="hover:opacity-80 transition-opacity touch-manipulation"
-                      >
-                        <img
-                          src={gif.images.fixed_height_small.url}
-                          alt={gif.title}
-                          className="w-full rounded-lg"
-                        />
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Poll Creator */}
+        {/* Icons Row - Toolbar */}
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto hide-scrollbar w-full pb-1">
+          {/* Emoji Picker */}
+          <div className="relative flex-shrink-0">
             <button
               onClick={() => {
-                setShowPollCreator(!showPollCreator);
-                setShowEmojiPicker(false);
+                setShowEmojiPicker(!showEmojiPicker);
                 setShowGifPicker(false);
               }}
-              className={`p-2 sm:p-2.5 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
-              }`}
-              title="Create Poll"
-              aria-label="Create Poll"
+              className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center"
+              title="Add Emoji"
+              aria-label="Add Emoji"
             >
-              <BarChart3 size={18} className="sm:w-5 sm:h-5" />
+              <Smile size={18} className="sm:w-5 sm:h-5" />
             </button>
+            {showEmojiPicker && (
+              <div
+                ref={emojiPickerRef}
+                className="fixed sm:absolute bottom-24 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
+                style={{ width: 'min(280px, calc(100vw - 1rem))' }}
+              >
+                <div className="grid grid-cols-5 gap-2">
+                  {emojis.map((emoji, index) => (
+                    <button
+                      key={index}
+                      onClick={() => {
+                        setMessageText(prev => prev + emoji);
+                        setShowEmojiPicker(false);
+                      }}
+                      className="text-xl sm:text-2xl hover:bg-slate-50 rounded-lg p-1.5 sm:p-2 transition-colors touch-manipulation"
+                    >
+                      {emoji}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-            {/* Tag Input */}
+          {/* GIF Picker */}
+          <div className="relative flex-shrink-0">
             <button
               onClick={() => {
-                const input = document.getElementById('tag-input') as HTMLInputElement;
-                if (input) {
-                  input.style.display = input.style.display === 'none' ? 'block' : 'none';
-                  if (input.style.display !== 'none') input.focus();
+                setShowGifPicker(!showGifPicker);
+                setShowEmojiPicker(false);
+                if (!showGifPicker) {
+                  searchGifs('trending');
                 }
               }}
-              className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
-              title="Add Tags"
-              aria-label="Add Tags"
+              className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center"
+              title="Add GIF"
+              aria-label="Add GIF"
             >
-              <Hash size={18} className="sm:w-5 sm:h-5" />
+              <ImageIcon size={18} className="sm:w-5 sm:h-5" />
             </button>
+            {showGifPicker && (
+              <div
+                ref={gifPickerRef}
+                className="fixed sm:absolute bottom-24 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
+                style={{ width: 'min(320px, calc(100vw - 1rem))', maxHeight: '400px' }}
+              >
+                <input
+                  type="text"
+                  placeholder="Search GIFs..."
+                  value={gifSearchTerm}
+                  onChange={(e) => {
+                    setGifSearchTerm(e.target.value);
+                    searchGifs(e.target.value);
+                  }}
+                  className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 touch-manipulation"
+                />
+                <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                  {gifResults.map((gif: any) => (
+                    <button
+                      key={gif.id}
+                      onClick={() => {
+                        setSelectedGif(gif.images.fixed_height.url);
+                        setShowGifPicker(false);
+                      }}
+                      className="hover:opacity-80 transition-opacity touch-manipulation"
+                    >
+                      <img
+                        src={gif.images.fixed_height_small.url}
+                        alt={gif.title}
+                        className="w-full rounded-lg"
+                      />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
 
-            {/* Location */}
-            <button
-              onClick={handleGetLocation}
-              className={`p-2 sm:p-2.5 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center ${
-                location ? 'text-primary bg-indigo-50' : 'text-slate-600'
-              }`}
-              title="Add Location"
-              aria-label="Add Location"
-            >
-              <MapPin size={18} className="sm:w-5 sm:h-5" />
-            </button>
-
-            {/* Image Upload */}
-            <label className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center" title="Upload Image" aria-label="Upload Image">
-              <Upload size={18} className="sm:w-5 sm:h-5" />
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={handleImageSelect}
-                className="hidden"
-              />
-            </label>
-
-            {/* File Attachment */}
-            <label className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center" title="Attach File" aria-label="Attach File">
-              <FileText size={18} className="sm:w-5 sm:h-5" />
-              <input 
-                type="file" 
-                accept=".pdf,.doc,.docx,.txt,.zip"
-                onChange={handleAttachmentSelect}
-                className="hidden"
-              />
-            </label>
-            </div>
-            
-            {/* Send Button - Same line, right side */}
-          <button 
-            onClick={handleSendMessage}
-              disabled={(!messageText.trim() && !selectedGif && !imageFile && !pollQuestion && !attachmentFile) || uploading}
-              className="bg-primary hover:bg-indigo-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 justify-center touch-manipulation flex-shrink-0 shadow-sm min-w-[60px] sm:min-w-auto min-h-[44px]"
-            >
-              {uploading ? (
-                <>
-                  <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span className="hidden sm:inline">Sending...</span>
-                  <span className="sm:hidden text-xs">...</span>
-                </>
-              ) : (
-                <>
-                  <span className="hidden sm:inline">Send</span>
-                  <Send size={14} className="sm:w-4 sm:h-4" />
-                </>
-              )}
+          {/* Poll Creator */}
+          <button
+            onClick={() => {
+              setShowPollCreator(!showPollCreator);
+              setShowEmojiPicker(false);
+              setShowGifPicker(false);
+            }}
+            className={`p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center ${
+              showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
+            }`}
+            title="Create Poll"
+            aria-label="Create Poll"
+          >
+            <BarChart3 size={18} className="sm:w-5 sm:h-5" />
           </button>
+
+          {/* Tag Input */}
+          <button
+            onClick={() => {
+              const input = document.getElementById('tag-input') as HTMLInputElement;
+              if (input) {
+                input.style.display = input.style.display === 'none' ? 'block' : 'none';
+                if (input.style.display !== 'none') input.focus();
+              }
+            }}
+            className="p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center"
+            title="Add Tags"
+            aria-label="Add Tags"
+          >
+            <Hash size={18} className="sm:w-5 sm:h-5" />
+          </button>
+
+          {/* Location */}
+          <button
+            onClick={handleGetLocation}
+            className={`p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center ${
+              location ? 'text-primary bg-indigo-50' : 'text-slate-600'
+            }`}
+            title="Add Location"
+            aria-label="Add Location"
+          >
+            <MapPin size={18} className="sm:w-5 sm:h-5" />
+          </button>
+
+          {/* Image Upload */}
+          <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center" title="Upload Image" aria-label="Upload Image">
+            <Upload size={18} className="sm:w-5 sm:h-5" />
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={handleImageSelect}
+              className="hidden"
+            />
+          </label>
+
+          {/* File Attachment */}
+          <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center" title="Attach File" aria-label="Attach File">
+            <FileText size={18} className="sm:w-5 sm:h-5" />
+            <input 
+              type="file" 
+              accept=".pdf,.doc,.docx,.txt,.zip"
+              onChange={handleAttachmentSelect}
+              className="hidden"
+            />
+          </label>
         </div>
       </div>
         
@@ -1764,30 +1772,35 @@ const StudyGroups: React.FC = () => {
 
         {/* Tags */}
         {tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
+          <div className="mt-2 flex flex-wrap gap-2 w-full max-w-full">
             {tags.map((tag, index) => (
               <span
                 key={index}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium"
+                className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium max-w-full"
               >
-                #{tag}
+                <span className="truncate">#{tag}</span>
                 <button
                   onClick={() => setTags(tags.filter((_, i) => i !== index))}
-                  className="hover:text-indigo-900"
+                  className="hover:text-indigo-900 touch-manipulation p-0.5 flex-shrink-0"
+                  aria-label={`Remove tag ${tag}`}
                 >
                   <X size={12} />
                 </button>
               </span>
             ))}
-      </div>
+          </div>
         )}
 
         {/* Location */}
         {location && (
-          <div className="mt-2 flex items-center gap-2 text-sm text-slate-600">
-            <MapPin size={14} />
-            <span className="truncate">{location.name}</span>
-            <button onClick={() => setLocation(null)} className="text-slate-400 hover:text-slate-600">
+          <div className="mt-2 flex items-center gap-2 text-sm text-slate-600 w-full max-w-full">
+            <MapPin size={14} className="flex-shrink-0" />
+            <span className="truncate flex-1 min-w-0">{location.name}</span>
+            <button 
+              onClick={() => setLocation(null)} 
+              className="text-slate-400 hover:text-slate-600 touch-manipulation p-1 min-w-[28px] min-h-[28px] flex items-center justify-center flex-shrink-0"
+              aria-label="Remove location"
+            >
               <X size={14} />
             </button>
           </div>
@@ -1795,13 +1808,17 @@ const StudyGroups: React.FC = () => {
 
         {/* Attachment Preview */}
         {attachmentPreview && (
-          <div className="mt-2 flex items-center gap-2 p-2 bg-slate-50 rounded-lg">
-            <FileText size={16} className="text-slate-600" />
-            <span className="text-sm text-slate-700 truncate flex-1">{attachmentPreview.name}</span>
-            <button onClick={() => {
-              setAttachmentFile(null);
-              setAttachmentPreview(null);
-            }} className="text-slate-400 hover:text-slate-600">
+          <div className="mt-2 flex items-center gap-2 p-2 bg-slate-50 rounded-lg w-full max-w-full">
+            <FileText size={16} className="text-slate-600 flex-shrink-0" />
+            <span className="text-sm text-slate-700 truncate flex-1 min-w-0">{attachmentPreview.name}</span>
+            <button 
+              onClick={() => {
+                setAttachmentFile(null);
+                setAttachmentPreview(null);
+              }} 
+              className="text-slate-400 hover:text-slate-600 touch-manipulation p-1 min-w-[28px] min-h-[28px] flex items-center justify-center flex-shrink-0"
+              aria-label="Remove attachment"
+            >
               <X size={14} />
             </button>
           </div>
@@ -1809,11 +1826,12 @@ const StudyGroups: React.FC = () => {
 
         {/* GIF Preview */}
         {selectedGif && (
-          <div className="mt-2 relative">
-            <img src={selectedGif} alt="Selected GIF" className="h-32 rounded-lg object-cover" />
+          <div className="mt-2 relative w-full max-w-full">
+            <img src={selectedGif} alt="Selected GIF" className="h-32 rounded-lg object-cover w-full max-w-full" />
             <button
               onClick={() => setSelectedGif(null)}
-              className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs hover:bg-black/70"
+              className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1.5 text-xs hover:bg-black/70 touch-manipulation min-w-[28px] min-h-[28px] flex items-center justify-center"
+              aria-label="Remove GIF"
             >
               <X size={12} />
             </button>
@@ -1822,14 +1840,15 @@ const StudyGroups: React.FC = () => {
 
         {/* Image Preview */}
         {imagePreview && (
-          <div className="mt-2 relative">
-            <img src={imagePreview} alt="Preview" className="h-32 rounded-lg object-cover" />
+          <div className="mt-2 relative w-full max-w-full">
+            <img src={imagePreview} alt="Preview" className="h-32 rounded-lg object-cover w-full max-w-full" />
             <button
               onClick={() => {
                 setImageFile(null);
                 setImagePreview('');
               }}
-              className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs hover:bg-black/70"
+              className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1.5 text-xs hover:bg-black/70 touch-manipulation min-w-[28px] min-h-[28px] flex items-center justify-center"
+              aria-label="Remove image"
             >
               <X size={12} />
             </button>
