@@ -168,24 +168,26 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
 
   return (
     <>
-      <header className="md:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-4 py-3 flex justify-between items-center">
-        <h1 className="text-xl font-bold text-slate-800">{title}</h1>
-        <div className="flex items-center gap-3">
+      <header className="md:hidden sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-slate-200 px-3 sm:px-4 py-2.5 sm:py-3 flex justify-between items-center safe-top">
+        <h1 className="text-lg sm:text-xl font-bold text-slate-800 truncate flex-1 min-w-0 mr-2">{title}</h1>
+        <div className="flex items-center gap-1.5 sm:gap-3 flex-shrink-0">
           {showSearchBar && (
             <button 
               onClick={() => setShowSearch(true)}
-              className="p-2 text-slate-600 hover:bg-slate-100 rounded-full"
+              className="p-1.5 sm:p-2 text-slate-600 hover:bg-slate-100 rounded-full touch-manipulation"
+              aria-label="Search"
             >
-              <Search size={20} />
+              <Search size={18} className="sm:w-5 sm:h-5" />
             </button>
           )}
           <button 
             onClick={() => navigate('/messages')}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-full relative"
+            className="p-1.5 sm:p-2 text-slate-600 hover:bg-slate-100 rounded-full relative touch-manipulation"
+            aria-label="Messages"
           >
-            <MessageCircle size={20} />
+            <MessageCircle size={18} className="sm:w-5 sm:h-5" />
             {messageUnreadCount > 0 && (
-              <span className="absolute top-1 right-1 bg-red-500 text-white text-xs font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+              <span className="absolute top-0.5 right-0.5 sm:top-1 sm:right-1 bg-red-500 text-white text-[10px] sm:text-xs font-bold rounded-full min-w-[16px] sm:min-w-[18px] h-4 sm:h-[18px] flex items-center justify-center px-0.5 sm:px-1">
                 {messageUnreadCount > 9 ? '9+' : messageUnreadCount}
               </span>
             )}
@@ -194,9 +196,10 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
           <div className="relative" ref={notificationRef}>
             <button 
               onClick={() => setShowNotifications(!showNotifications)}
-              className={`p-2 rounded-full relative ${showNotifications ? 'bg-slate-100 text-primary' : 'text-slate-600 hover:bg-slate-100'}`}
+              className={`p-1.5 sm:p-2 rounded-full relative ${showNotifications ? 'bg-slate-100 text-primary' : 'text-slate-600 hover:bg-slate-100'} touch-manipulation`}
+              aria-label="Notifications"
             >
-              <Bell size={20} />
+              <Bell size={18} className="sm:w-5 sm:h-5" />
               {notificationUnreadCount > 0 && (
                 <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
               )}
@@ -204,62 +207,71 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
 
             {/* Notifications Dropdown */}
             {showNotifications && (
-              <div className="absolute right-0 top-full mt-2 w-80 md:w-96 bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden max-h-[80vh] flex flex-col">
-                <div className="p-3 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0">
-                  <h3 className="font-semibold text-slate-800">Notifications</h3>
-                  {notificationUnreadCount > 0 && (
-                    <button 
-                      onClick={markAllNotificationsRead}
-                      className="text-xs text-primary hover:text-indigo-700 flex items-center gap-1"
-                    >
-                      <Check size={12} />
-                      Mark all read
-                    </button>
-                  )}
-                </div>
-                
-                <div className="overflow-y-auto flex-1">
-                  {notifications.length > 0 ? (
-                    notifications.map((notification) => (
-                      <div 
-                        key={notification.id}
-                        onClick={() => handleNotificationClick(notification)}
-                        className={`p-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer flex gap-3 ${
-                          !notification.read ? 'bg-indigo-50/50' : ''
-                        }`}
+              <>
+                {/* Backdrop for mobile */}
+                <div 
+                  className="fixed inset-0 bg-black/20 z-40 md:hidden"
+                  onClick={() => setShowNotifications(false)}
+                />
+                <div className="fixed md:absolute right-2 md:right-0 top-14 md:top-full mt-2 w-[calc(100vw-2rem)] sm:w-[calc(100vw-4rem)] md:w-80 lg:w-96 max-w-sm bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden max-h-[calc(100vh-5rem)] md:max-h-[80vh] flex flex-col">
+                  <div className="p-3 sm:p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10 flex-shrink-0">
+                    <h3 className="font-semibold text-slate-800 text-sm sm:text-base">Notifications</h3>
+                    {notificationUnreadCount > 0 && (
+                      <button 
+                        onClick={markAllNotificationsRead}
+                        className="text-xs text-primary hover:text-indigo-700 flex items-center gap-1 touch-manipulation px-2 py-1 min-h-[32px]"
                       >
-                        <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
-                          !notification.read ? 'bg-primary' : 'bg-transparent'
-                        }`} />
-                        
-                        <div className="flex-1">
-                          <p className="text-sm font-medium text-slate-800">{notification.title}</p>
-                          <p className="text-sm text-slate-600 mt-0.5">{notification.message}</p>
-                          <p className="text-xs text-slate-400 mt-2">
-                            {notification.createdAt 
-                              ? (notification.createdAt instanceof Date 
-                                  ? notification.createdAt.toLocaleDateString()
-                                  : new Date((notification.createdAt as any).seconds * 1000).toLocaleDateString())
-                              : 'Just now'}
-                          </p>
-                        </div>
-
-                        <button
-                          onClick={(e) => deleteNotification(e, notification.id)}
-                          className="text-slate-400 hover:text-red-500 p-1"
+                        <Check size={12} />
+                        <span className="hidden sm:inline">Mark all read</span>
+                        <span className="sm:hidden">Mark</span>
+                      </button>
+                    )}
+                  </div>
+                  
+                  <div className="overflow-y-auto flex-1 min-h-0">
+                    {notifications.length > 0 ? (
+                      notifications.map((notification) => (
+                        <div 
+                          key={notification.id}
+                          onClick={() => handleNotificationClick(notification)}
+                          className={`p-3 sm:p-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer flex gap-2 sm:gap-3 touch-manipulation ${
+                            !notification.read ? 'bg-indigo-50/50' : ''
+                          }`}
                         >
-                          <Trash2 size={14} />
-                        </button>
+                          <div className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
+                            !notification.read ? 'bg-primary' : 'bg-transparent'
+                          }`} />
+                          
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-slate-800 break-words">{notification.title}</p>
+                            <p className="text-sm text-slate-600 mt-0.5 break-words">{notification.message}</p>
+                            <p className="text-xs text-slate-400 mt-2">
+                              {notification.createdAt 
+                                ? (notification.createdAt instanceof Date 
+                                    ? notification.createdAt.toLocaleDateString()
+                                    : new Date((notification.createdAt as any).seconds * 1000).toLocaleDateString())
+                                : 'Just now'}
+                            </p>
+                          </div>
+
+                          <button
+                            onClick={(e) => deleteNotification(e, notification.id)}
+                            className="text-slate-400 hover:text-red-500 p-1.5 sm:p-2 touch-manipulation flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
+                            aria-label="Delete notification"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="p-8 text-center text-slate-500">
+                        <Bell size={32} className="mx-auto mb-2 text-slate-300" />
+                        <p className="text-sm">No notifications yet</p>
                       </div>
-                    ))
-                  ) : (
-                    <div className="p-8 text-center text-slate-500">
-                      <Bell size={32} className="mx-auto mb-2 text-slate-300" />
-                      <p>No notifications yet</p>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
           </div>
         </div>
@@ -267,7 +279,7 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
 
       {/* Desktop Search Bar */}
       {showSearchBar && (
-      <div className="hidden md:block fixed top-4 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
+      <div className="hidden md:block fixed top-4 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-md px-4">
         <div className="relative">
           <input
             type="text"
@@ -325,12 +337,16 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
 
       {/* Mobile Search Modal */}
       {showSearchBar && showSearch && (
-        <div className="md:hidden fixed inset-0 z-50 bg-white">
-          <div className="p-4 border-b border-slate-200 flex items-center gap-3">
-            <button onClick={() => {
-              setShowSearch(false);
-              setSearchQuery('');
-            }}>
+        <div className="md:hidden fixed inset-0 z-50 bg-white safe-top safe-bottom overflow-y-auto">
+          <div className="p-3 sm:p-4 border-b border-slate-200 flex items-center gap-3 sticky top-0 bg-white z-10">
+            <button 
+              onClick={() => {
+                setShowSearch(false);
+                setSearchQuery('');
+              }}
+              className="p-2 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Close search"
+            >
               <X size={24} className="text-slate-600" />
             </button>
             <input
@@ -339,11 +355,11 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search people..."
-              className="flex-1 text-lg focus:outline-none"
+              className="flex-1 text-base sm:text-lg focus:outline-none min-h-[44px] px-2"
             />
           </div>
 
-          <div className="p-4">
+          <div className="p-3 sm:p-4">
             {searching ? (
               <div className="text-center py-8 text-slate-500">Searching...</div>
             ) : searchResults.length > 0 ? (

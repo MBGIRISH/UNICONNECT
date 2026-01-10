@@ -540,25 +540,26 @@ const Feed: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 w-full max-w-full overflow-x-hidden">
       <Header title="Campus Feed" />
       
-      <div className="max-w-2xl mx-auto pt-4 px-4 md:px-6">
+      <div className="max-w-2xl mx-auto pt-3 sm:pt-4 px-3 sm:px-4 md:px-6 w-full">
         {/* Create Post Widget */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-4 mb-6">
-          <div className="flex gap-3 mb-3">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 sm:p-4 mb-4 sm:mb-6 w-full max-w-full overflow-hidden">
+          <div className="flex gap-2 sm:gap-3 mb-3">
             <img 
               src={user?.photoURL || "https://ui-avatars.com/api/?name=User"} 
               alt="Me" 
-              className="w-10 h-10 rounded-full object-cover" 
+              className="w-9 h-9 sm:w-10 sm:h-10 rounded-full object-cover flex-shrink-0" 
             />
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
                 <textarea 
-                className="w-full bg-slate-50 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+                className="w-full bg-slate-50 rounded-xl p-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none min-w-0"
                 placeholder="What's happening on campus?"
                 rows={3}
                 value={newPostText}
                 onChange={(e) => setNewPostText(e.target.value)}
+                style={{ maxWidth: '100%' }}
                 />
                 {imagePreview && (
                   <div className="mt-2 relative">
@@ -697,8 +698,8 @@ const Feed: React.FC = () => {
             </div>
           )}
 
-          <div className="flex justify-between items-center border-t border-slate-100 pt-3 mt-3">
-            <div className="flex gap-1 md:gap-2 flex-wrap">
+          <div className="flex justify-between items-center border-t border-slate-100 pt-3 mt-3 gap-2">
+            <div className="flex gap-1 sm:gap-1.5 md:gap-2 flex-wrap flex-1 min-w-0">
               {/* Emoji Picker */}
               <div className="relative">
                 <button
@@ -706,16 +707,17 @@ const Feed: React.FC = () => {
                     setShowEmojiPicker(!showEmojiPicker);
                     setShowGifPicker(false);
                   }}
-                  className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors"
+                  className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation flex-shrink-0"
                   title="Add Emoji"
+                  aria-label="Add Emoji"
                 >
-                  <Smile size={20} />
+                  <Smile size={18} className="sm:w-5 sm:h-5" />
                 </button>
                 {showEmojiPicker && (
                   <div
                     ref={emojiPickerRef}
-                    className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
-                    style={{ width: '280px' }}
+                    className="fixed sm:absolute bottom-20 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
+                    style={{ width: 'min(280px, calc(100vw - 1rem))' }}
                   >
                     <div className="grid grid-cols-5 gap-2">
                       {commonEmojis.map((emoji, index) => (
@@ -742,16 +744,17 @@ const Feed: React.FC = () => {
                       searchGifs('trending');
                     }
                   }}
-                  className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors"
+                  className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation flex-shrink-0"
                   title="Add GIF"
+                  aria-label="Add GIF"
                 >
-                  <ImageIcon size={20} />
+                  <ImageIcon size={18} className="sm:w-5 sm:h-5" />
                 </button>
                 {showGifPicker && (
                   <div
                     ref={gifPickerRef}
-                    className="absolute bottom-full left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
-                    style={{ width: '320px', maxHeight: '400px' }}
+                    className="fixed sm:absolute bottom-20 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
+                    style={{ width: 'min(320px, calc(100vw - 1rem))', maxHeight: '400px' }}
                   >
                     <input
                       type="text"
@@ -792,12 +795,13 @@ const Feed: React.FC = () => {
                   setShowEmojiPicker(false);
                   setShowGifPicker(false);
                 }}
-                className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
+                className={`p-1.5 sm:p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
                   showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
                 }`}
                 title="Create Poll"
+                aria-label="Create Poll"
               >
-                <BarChart3 size={20} />
+                <BarChart3 size={18} className="sm:w-5 sm:h-5" />
               </button>
 
               {/* Tag Input */}
@@ -809,26 +813,28 @@ const Feed: React.FC = () => {
                     if (input.style.display !== 'none') input.focus();
                   }
                 }}
-                className="p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors"
+                className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0"
                 title="Add Tags"
+                aria-label="Add Tags"
               >
-                <Hash size={20} />
+                <Hash size={18} className="sm:w-5 sm:h-5" />
               </button>
 
               {/* Location */}
               <button 
                 onClick={handleGetLocation}
-                className={`p-2 hover:bg-slate-50 rounded-full transition-colors ${
+                className={`p-1.5 sm:p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
                   location ? 'text-primary bg-indigo-50' : 'text-slate-600'
                 }`}
                 title="Add Location"
+                aria-label="Add Location"
               >
-                <MapPin size={20} />
+                <MapPin size={18} className="sm:w-5 sm:h-5" />
               </button>
 
               {/* Image Upload */}
-              <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors" title="Upload Image">
-                <Upload size={20} />
+              <label className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0" title="Upload Image" aria-label="Upload Image">
+                <Upload size={18} className="sm:w-5 sm:h-5" />
                 <input 
                   type="file" 
                   accept="image/*" 
@@ -838,8 +844,8 @@ const Feed: React.FC = () => {
               </label>
 
               {/* File Attachment */}
-              <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors" title="Attach File">
-                <FileText size={20} />
+              <label className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0" title="Attach File" aria-label="Attach File">
+                <FileText size={18} className="sm:w-5 sm:h-5" />
                 <input 
                   type="file" 
                   accept=".pdf,.doc,.docx,.txt,.zip"
@@ -851,7 +857,7 @@ const Feed: React.FC = () => {
             <button 
                 onClick={handlePost}
                 disabled={(!newPostText.trim() && !selectedGif && !imageFile && !pollQuestion) || uploading}
-                className="bg-primary hover:bg-indigo-700 text-white px-4 md:px-6 py-2 rounded-full text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-2"
+                className="bg-primary hover:bg-indigo-700 text-white px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 touch-manipulation"
             >
               {uploading ? (
                 <>
@@ -874,8 +880,8 @@ const Feed: React.FC = () => {
         ) : (
             <div className="space-y-6">
             {posts.map(post => (
-                <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-                <div className="p-4 flex items-center justify-between">
+                <div key={post.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden w-full max-w-full">
+                <div className="p-3 sm:p-4 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-3">
                     <button
                       onClick={() => post.authorId && navigate(`/profile/${post.authorId}`)}
@@ -901,8 +907,8 @@ const Feed: React.FC = () => {
                     </button>
                 </div>
 
-                <div className="px-4 pb-3">
-                    <p className="text-slate-800 leading-relaxed whitespace-pre-line">{post.content}</p>
+                <div className="px-3 sm:px-4 pb-3">
+                    <p className="text-slate-800 leading-relaxed whitespace-pre-wrap break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{post.content}</p>
                     
                     {/* Tags */}
                     {post.tags && post.tags.length > 0 && (
@@ -1085,7 +1091,7 @@ const Feed: React.FC = () => {
                     </div>
                 )}
 
-                <div className="p-4 flex items-center justify-between border-t border-slate-100">
+                <div className="p-3 sm:p-4 flex items-center justify-between border-t border-slate-100 gap-2">
                     <div className="flex items-center gap-6">
                     <button 
                       onClick={() => handleLike(post.id)}

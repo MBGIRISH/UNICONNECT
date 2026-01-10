@@ -363,10 +363,10 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 w-full max-w-full overflow-x-hidden">
       <Header title={isOwnProfile ? "My Profile" : profile.displayName} showSearchBar={true} />
       
-      <div className="max-w-4xl mx-auto p-4 md:p-6">
+      <div className="max-w-4xl mx-auto p-3 sm:p-4 md:p-6 w-full">
         <div className="bg-white md:rounded-3xl overflow-hidden shadow-sm border border-slate-100">
           {/* Banner */}
           <div className="relative h-32 md:h-48 overflow-hidden">
@@ -444,14 +444,14 @@ const Profile: React.FC = () => {
                           setAvatarPreview('');
                           setBackgroundPreview('');
                         }}
-                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50"
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2.5 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 touch-manipulation min-h-[44px]"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={handleSave}
                         disabled={saving}
-                        className="flex-1 md:flex-none bg-indigo-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 md:gap-2"
+                        className="flex-1 md:flex-none bg-indigo-600 text-white px-3 md:px-4 py-2.5 rounded-lg font-medium text-xs md:text-sm hover:bg-indigo-700 disabled:opacity-50 flex items-center gap-1.5 md:gap-2 justify-center touch-manipulation min-h-[44px]"
                       >
                         {saving ? <Loader2 className="animate-spin" size={14} /> : <Check size={14} />}
                         {saving ? 'Saving...' : 'Save'}
@@ -461,7 +461,7 @@ const Profile: React.FC = () => {
                     <>
                       <button
                         onClick={() => setIsEditing(true)}
-                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center"
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2.5 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center touch-manipulation min-h-[44px]"
                       >
                         <Edit2 size={14} className="md:w-4 md:h-4" />
                         <span className="hidden sm:inline">Edit Profile</span>
@@ -469,7 +469,7 @@ const Profile: React.FC = () => {
                       </button>
                       <button
                         onClick={handleShare}
-                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center"
+                        className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2.5 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center touch-manipulation min-h-[44px]"
                       >
                         <Share2 size={14} className="md:w-4 md:h-4" />
                         <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Share'}</span>
@@ -477,7 +477,7 @@ const Profile: React.FC = () => {
                       </button>
                       <button
                         onClick={handleLogout}
-                        className="flex-1 md:flex-none bg-red-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-red-700 shadow-lg shadow-red-200 flex items-center gap-1.5 md:gap-2 justify-center"
+                        className="flex-1 md:flex-none bg-red-600 text-white px-3 md:px-4 py-2.5 rounded-lg font-medium text-xs md:text-sm hover:bg-red-700 shadow-lg shadow-red-200 flex items-center gap-1.5 md:gap-2 justify-center touch-manipulation min-h-[44px]"
                       >
                         <LogOut size={14} className="md:w-4 md:h-4" />
                         <span className="hidden sm:inline">Logout</span>
@@ -495,7 +495,7 @@ const Profile: React.FC = () => {
                           userPhoto: profile.photoURL
                         } 
                       })}
-                      className="flex-1 md:flex-none bg-indigo-600 text-white px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center gap-1.5 md:gap-2 justify-center"
+                      className="flex-1 md:flex-none bg-indigo-600 text-white px-3 md:px-4 py-2.5 rounded-lg font-medium text-xs md:text-sm hover:bg-indigo-700 shadow-lg shadow-indigo-200 flex items-center gap-1.5 md:gap-2 justify-center touch-manipulation min-h-[44px]"
                     >
                       <MessageCircle size={14} className="md:w-4 md:h-4" />
                       <span className="hidden sm:inline">Message</span>
@@ -503,7 +503,7 @@ const Profile: React.FC = () => {
                     </button>
                     <button
                       onClick={handleShare}
-                      className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center"
+                      className="flex-1 md:flex-none bg-white border border-slate-300 text-slate-700 px-3 md:px-4 py-2.5 rounded-lg font-medium text-xs md:text-sm hover:bg-slate-50 flex items-center gap-1.5 md:gap-2 justify-center touch-manipulation min-h-[44px]"
                     >
                       <Share2 size={14} className="md:w-4 md:h-4" />
                       <span className="hidden sm:inline">{linkCopied ? 'Copied!' : 'Share'}</span>
@@ -512,7 +512,8 @@ const Profile: React.FC = () => {
                     <div className="relative">
                       <button
                         onClick={() => setShowMenu(!showMenu)}
-                        className="p-2 hover:bg-slate-100 rounded-lg"
+                        className="p-2 hover:bg-slate-100 rounded-lg touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+                        aria-label="More options"
                       >
                         <MoreVertical size={20} />
                       </button>
@@ -520,14 +521,14 @@ const Profile: React.FC = () => {
                         <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-slate-200 py-2 z-10">
                           <button
                             onClick={handleBlock}
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700"
+                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-slate-700 touch-manipulation min-h-[44px]"
                           >
                             <Ban size={16} />
                             {isBlocked ? 'Unblock User' : 'Block User'}
                           </button>
                           <button
                             onClick={handleReport}
-                            className="w-full px-4 py-2 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-red-600"
+                            className="w-full px-4 py-2.5 text-left text-sm hover:bg-slate-50 flex items-center gap-2 text-red-600 touch-manipulation min-h-[44px]"
                           >
                             <AlertTriangle size={16} />
                             Report User

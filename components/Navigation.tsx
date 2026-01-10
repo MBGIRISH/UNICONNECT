@@ -59,18 +59,18 @@ const Navigation: React.FC = () => {
       </nav>
 
       {/* Mobile Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-2 py-2 z-50 pb-safe">
-        <div className="flex justify-around items-center">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-1 sm:px-2 py-1.5 sm:py-2 z-50 pb-safe shadow-lg w-full max-w-full">
+        <div className="flex justify-around items-center w-full max-w-full">
           {navItems.map((item) => (
             <Link
               key={item.path}
               to={item.path}
-              className={`flex flex-col items-center gap-0.5 min-w-0 flex-1 ${
+              className={`flex flex-col items-center gap-0.5 min-w-0 flex-1 touch-manipulation px-1 max-w-full ${
                 isActive(item.path) ? 'text-primary' : 'text-slate-400'
               }`}
             >
-              <item.icon size={20} strokeWidth={isActive(item.path) ? 2.5 : 2} />
-              <span className="text-[9px] font-medium truncate w-full text-center">{item.label}</span>
+              <item.icon size={20} className="sm:w-5 sm:h-5 flex-shrink-0" strokeWidth={isActive(item.path) ? 2.5 : 2} />
+              <span className="text-[9px] sm:text-[10px] font-medium truncate w-full text-center leading-tight max-w-full">{item.label}</span>
             </Link>
           ))}
         </div>

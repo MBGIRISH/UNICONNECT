@@ -269,9 +269,9 @@ const Messages: React.FC = () => {
 
   if (!selectedUser) {
     return (
-      <div className="flex h-screen bg-slate-50 overflow-hidden pb-20 md:pb-0">
+      <div className="flex h-screen bg-slate-50 overflow-hidden pb-20 md:pb-0 w-full max-w-full">
         {/* Conversations List */}
-        <div className="w-full md:w-96 bg-white border-r border-slate-200 flex flex-col h-full">
+        <div className="w-full md:w-96 bg-white border-r border-slate-200 flex flex-col h-full max-w-full overflow-hidden">
           <div className="p-3 sm:p-4 border-b border-slate-200 flex-shrink-0">
             <h1 className="text-xl sm:text-2xl font-bold text-slate-800">Messages</h1>
           </div>
@@ -329,12 +329,13 @@ const Messages: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen md:h-screen bg-white overflow-hidden pb-20 md:pb-0 max-w-full">
+    <div className="flex flex-col h-screen md:h-screen bg-white overflow-hidden pb-20 md:pb-0 w-full max-w-full">
       {/* Chat Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 flex items-center gap-2 sm:gap-3 bg-white sticky top-0 z-10 flex-shrink-0">
+      <div className="p-3 sm:p-4 border-b border-slate-200 flex items-center gap-2 sm:gap-3 bg-white sticky top-0 z-10 flex-shrink-0 safe-top">
         <button 
           onClick={() => setSelectedUser(null)}
-          className="md:hidden flex-shrink-0"
+          className="md:hidden flex-shrink-0 p-2 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+          aria-label="Back"
         >
           <ArrowLeft size={20} className="sm:w-6 sm:h-6 text-slate-600" />
         </button>
@@ -350,7 +351,7 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-3 sm:space-y-4 bg-slate-50 min-h-0" style={{ maxHeight: 'calc(100vh - 180px)', width: '100%' }}>
+      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-3 sm:space-y-4 bg-slate-50 min-h-0 pb-20 md:pb-4" style={{ maxHeight: 'calc(100vh - 180px)', width: '100%' }}>
         {messages.map((msg) => {
           const isMine = msg.senderId === currentUser?.uid;
           return (
@@ -387,8 +388,8 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Input - Sticky at bottom with safe area padding, above mobile nav */}
-      <div className="p-3 sm:p-4 border-t border-slate-200 bg-white fixed md:sticky bottom-20 md:bottom-0 left-0 right-0 z-10 flex-shrink-0 pb-safe md:pb-0 max-w-full">
-        <div className="flex items-center gap-2 w-full">
+      <div className="p-3 sm:p-4 border-t border-slate-200 bg-white fixed md:sticky bottom-20 md:bottom-0 left-0 right-0 z-10 flex-shrink-0 pb-safe md:pb-0 max-w-full shadow-lg md:shadow-none">
+        <div className="flex items-center gap-2 sm:gap-3 w-full">
           <input
             type="file"
             ref={fileInputRef}
@@ -399,10 +400,10 @@ const Messages: React.FC = () => {
           <button
             onClick={() => fileInputRef.current?.click()}
             disabled={uploading}
-            className="p-2 text-slate-600 hover:bg-slate-100 rounded-full flex-shrink-0 touch-manipulation"
+            className="p-2 sm:p-2.5 text-slate-600 hover:bg-slate-100 rounded-full flex-shrink-0 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Upload image"
           >
-            <ImageIcon size={18} className="sm:w-5 sm:h-5" />
+            <ImageIcon size={20} className="sm:w-5 sm:h-5" />
           </button>
           <input
             type="text"
@@ -410,15 +411,15 @@ const Messages: React.FC = () => {
             onChange={(e) => setNewMessage(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
             placeholder="Type a message..."
-            className="flex-1 min-w-0 px-3 py-2 sm:px-4 sm:py-2 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm sm:text-base"
+            className="flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm sm:text-base touch-manipulation"
           />
           <button
             onClick={handleSendMessage}
             disabled={!newMessage.trim() || uploading}
-            className="p-2 sm:p-2.5 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 touch-manipulation transition-colors"
+            className="p-2.5 sm:p-3 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 touch-manipulation transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
             aria-label="Send message"
           >
-            <Send size={18} className="sm:w-5 sm:h-5" />
+            <Send size={20} className="sm:w-5 sm:h-5" />
           </button>
         </div>
         {uploading && (

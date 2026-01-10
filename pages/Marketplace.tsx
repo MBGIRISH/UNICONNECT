@@ -266,10 +266,10 @@ const Marketplace: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 w-full max-w-full overflow-x-hidden">
       <Header title="Marketplace" />
       
-      <div className="max-w-6xl mx-auto p-4 md:px-6">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:px-6 w-full">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-lg font-semibold text-slate-800 hidden md:block">Browse Listings</h2>
           <div className="flex gap-3 w-full md:w-auto justify-end">
@@ -304,18 +304,18 @@ const Marketplace: React.FC = () => {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 w-full max-w-full">
             {items.map(item => (
               <div 
                 key={item.id} 
                 onClick={() => handleViewDetails(item)}
-                className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden group cursor-pointer"
+                className="bg-white rounded-xl border border-slate-100 shadow-sm hover:shadow-md transition-all overflow-hidden group cursor-pointer touch-manipulation w-full max-w-full"
               >
-                <div className="aspect-square overflow-hidden bg-slate-100 relative">
+                <div className="aspect-square overflow-hidden bg-slate-100 relative w-full">
                   <img 
                     src={item.images[0] || 'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=400'} 
                     alt={item.title} 
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" 
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300 max-w-full" 
                   />
                   <div className="absolute bottom-2 left-2 bg-black/70 backdrop-blur-sm text-white px-2 py-1 rounded text-xs font-bold">
                     ₹{item.price}
@@ -326,13 +326,13 @@ const Marketplace: React.FC = () => {
                     </div>
                   )}
                 </div>
-                <div className="p-3">
-                  <h3 className="font-medium text-slate-800 truncate text-sm mb-1">{item.title}</h3>
-                  <div className="flex items-center justify-between text-xs text-slate-500">
-                    <span className="px-2 py-0.5 bg-slate-100 rounded">{item.condition}</span>
-                    <div className="flex items-center gap-1 truncate">
-                      <Tag size={12} />
-                      <span className="truncate">{item.sellerName}</span>
+                <div className="p-2 sm:p-3 min-w-0">
+                  <h3 className="font-medium text-slate-800 truncate text-xs sm:text-sm mb-1" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.title}</h3>
+                  <div className="flex items-center justify-between text-[10px] sm:text-xs text-slate-500 gap-1">
+                    <span className="px-1.5 sm:px-2 py-0.5 bg-slate-100 rounded whitespace-nowrap">{item.condition}</span>
+                    <div className="flex items-center gap-1 min-w-0 flex-1 justify-end">
+                      <Tag size={10} className="sm:w-3 sm:h-3 flex-shrink-0" />
+                      <span className="truncate min-w-0">{item.sellerName}</span>
                     </div>
                   </div>
                 </div>
@@ -344,10 +344,10 @@ const Marketplace: React.FC = () => {
 
       {/* Sell Item Modal */}
       {showSellModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 md:p-6">
-          <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-              <h2 className="text-xl font-bold text-slate-800">Sell an Item</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 md:p-6 safe-top safe-bottom">
+          <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+              <h2 className="text-lg sm:text-xl font-bold text-slate-800">Sell an Item</h2>
               <button onClick={() => {
                 setShowSellModal(false);
                 setImageFiles([]);
@@ -356,7 +356,7 @@ const Marketplace: React.FC = () => {
                 <X size={24}/>
               </button>
             </div>
-            <form onSubmit={handleSell} className="p-6 space-y-4">
+            <form onSubmit={handleSell} className="p-4 sm:p-6 space-y-4">
               <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">Item Title *</label>
                 <input 
@@ -364,11 +364,11 @@ const Marketplace: React.FC = () => {
                   value={newItem.title}
                   onChange={e => setNewItem({...newItem, title: e.target.value})}
                   placeholder="e.g. Calculus Textbook"
-                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200" 
+                  className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base touch-manipulation" 
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-2 gap-3 sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Price (₹) *</label>
                   <input 
@@ -476,7 +476,7 @@ const Marketplace: React.FC = () => {
               <button 
                 type="submit" 
                 disabled={uploading}
-                className="w-full py-3 bg-primary text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors"
+                className="w-full py-3 sm:py-3.5 bg-primary text-white font-bold rounded-xl hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2 transition-colors touch-manipulation text-sm sm:text-base"
               >
                 {uploading ? (
                   <>
@@ -497,26 +497,26 @@ const Marketplace: React.FC = () => {
 
       {/* Item Detail Modal */}
       {showDetailModal && selectedItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 md:p-4">
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[95vh] md:max-h-[90vh] overflow-y-auto">
-            <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-              <h2 className="text-lg md:text-xl font-bold text-slate-800">Item Details</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-2 sm:p-3 md:p-4 safe-top safe-bottom">
+          <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-2xl max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-xl">
+            <div className="p-4 sm:p-5 md:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+              <h2 className="text-base sm:text-lg md:text-xl font-bold text-slate-800">Item Details</h2>
               <button onClick={() => setShowDetailModal(false)} className="text-slate-400 hover:text-slate-600">
                 <X size={24}/>
               </button>
             </div>
-            <div className="p-4 md:p-6">
+            <div className="p-4 sm:p-5 md:p-6">
               {/* Image Gallery */}
-              <div className="mb-4 md:mb-6">
+              <div className="mb-4 md:mb-6 w-full max-w-full">
                 <img 
                   src={selectedItem.images[0] || 'https://images.unsplash.com/photo-1581235720704-06d3acfcb36f?w=600'} 
                   alt={selectedItem.title} 
-                  className="w-full h-48 md:h-64 object-cover rounded-xl mb-3"
+                  className="w-full h-48 md:h-64 object-cover rounded-xl mb-3 max-w-full"
                 />
                 {selectedItem.images.length > 1 && (
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-4 gap-2 w-full max-w-full">
                     {selectedItem.images.slice(1, 5).map((img, idx) => (
-                      <img key={idx} src={img} alt={`${selectedItem.title} ${idx + 2}`} className="w-full h-20 object-cover rounded-lg" />
+                      <img key={idx} src={img} alt={`${selectedItem.title} ${idx + 2}`} className="w-full h-20 object-cover rounded-lg max-w-full" />
                     ))}
                   </div>
                 )}
@@ -525,7 +525,7 @@ const Marketplace: React.FC = () => {
               {/* Details */}
               <div className="space-y-4">
                 <div>
-                  <h3 className="text-lg md:text-2xl font-bold text-slate-900 mb-2 break-words">{selectedItem.title}</h3>
+                  <h3 className="text-base sm:text-lg md:text-2xl font-bold text-slate-900 mb-2 break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{selectedItem.title}</h3>
                   <div className="flex flex-wrap items-center gap-2 text-sm">
                     <span className="px-2 md:px-3 py-1 bg-indigo-50 text-indigo-600 rounded-full font-medium text-xs md:text-sm">{selectedItem.category}</span>
                     <span className="px-2 md:px-3 py-1 bg-slate-100 text-slate-700 rounded-full text-xs md:text-sm">{selectedItem.condition}</span>
@@ -545,14 +545,14 @@ const Marketplace: React.FC = () => {
                     <p className="text-xs md:text-sm text-slate-500">Seller</p>
                     <p className="font-semibold text-slate-900 truncate text-sm md:text-base">{selectedItem.sellerName}</p>
                   </div>
-                  <div className="text-right flex-shrink-0">
-                    <p className="text-xl md:text-3xl font-bold text-primary">₹{selectedItem.price}</p>
+                  <div className="text-right flex-shrink-0 min-w-0">
+                    <p className="text-lg sm:text-xl md:text-3xl font-bold text-primary break-words">{selectedItem.price}</p>
                   </div>
                 </div>
 
                 <div>
-                  <h4 className="font-semibold text-slate-900 mb-2">Description</h4>
-                  <p className="text-slate-600 leading-relaxed">{selectedItem.description}</p>
+                  <h4 className="font-semibold text-slate-900 mb-2 text-sm sm:text-base">Description</h4>
+                  <p className="text-slate-600 leading-relaxed text-sm sm:text-base break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{selectedItem.description}</p>
                 </div>
 
                 <div className="flex gap-3 pt-4">
@@ -569,9 +569,9 @@ const Marketplace: React.FC = () => {
                     <button 
                       onClick={handleStartChat}
                       disabled={selectedItem.isSold}
-                      className="flex-1 py-3 bg-primary text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors"
+                      className="flex-1 py-3 sm:py-3.5 bg-primary text-white rounded-xl font-semibold hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition-colors touch-manipulation text-sm sm:text-base"
                     >
-                      <MessageCircle size={20} />
+                      <MessageCircle size={18} className="sm:w-5 sm:h-5" />
                       {selectedItem.isSold ? 'Item Sold' : 'Message Seller'}
                     </button>
                   )}

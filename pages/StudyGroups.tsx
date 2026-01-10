@@ -1058,9 +1058,9 @@ const StudyGroups: React.FC = () => {
   // Group List View
   if (!selectedGroup) {
     return (
-      <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64">
+      <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 w-full max-w-full overflow-x-hidden">
         <Header title="Study Groups" />
-        <div className="max-w-3xl mx-auto p-4 md:px-6">
+        <div className="max-w-3xl mx-auto p-3 sm:p-4 md:px-6 w-full">
           {/* Action Buttons */}
           <div className="flex gap-2 mb-4">
             <button 
@@ -1167,10 +1167,10 @@ const StudyGroups: React.FC = () => {
 
         {/* Create Group Modal */}
         {showCreateModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-                <h2 className="text-lg md:text-xl font-bold text-slate-800">Create Group</h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 safe-top safe-bottom">
+            <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-xl mx-auto">
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800">Create Group</h2>
                 <button onClick={() => setShowCreateModal(false)} className="text-slate-400 hover:text-slate-600">
                   <X size={24}/>
                 </button>
@@ -1229,10 +1229,10 @@ const StudyGroups: React.FC = () => {
 
         {/* Join Group Modal */}
         {showJoinModal && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-              <div className="p-4 md:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-                <h2 className="text-lg md:text-xl font-bold text-slate-800">Join a Group</h2>
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 safe-top safe-bottom">
+            <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-xl mx-auto">
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800">Join a Group</h2>
                 <button onClick={() => setShowJoinModal(false)} className="text-slate-400 hover:text-slate-600">
                   <X size={24}/>
                 </button>
@@ -1277,11 +1277,11 @@ const StudyGroups: React.FC = () => {
 
   // Chat View
   return (
-    <div className="h-screen flex flex-col bg-white md:ml-64 relative z-0">
+    <div className="h-screen flex flex-col bg-white md:ml-64 relative z-0 w-full max-w-full overflow-hidden">
       {/* Chat Header */}
       <div className="px-4 py-3 border-b border-slate-200 flex justify-between items-center bg-white shadow-sm z-10">
         <div className="flex items-center gap-3">
-          <button onClick={() => setSelectedGroup(null)} className="p-1 -ml-1 text-slate-500 hover:bg-slate-100 rounded-full">
+          <button onClick={() => setSelectedGroup(null)} className="p-2 -ml-1 text-slate-500 hover:bg-slate-100 rounded-full touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center" aria-label="Back">
             <ArrowLeft size={20} />
           </button>
           <div className="w-10 h-10 bg-indigo-100 text-indigo-600 rounded-full flex items-center justify-center">
@@ -1507,12 +1507,12 @@ const StudyGroups: React.FC = () => {
       )}
 
       {/* Input Area - Sticky at bottom on mobile */}
-      <div className="sticky bottom-0 bg-white border-t border-slate-200 p-2 md:p-4 pb-20 md:pb-4 z-20">
+      <div className="sticky bottom-0 bg-white border-t border-slate-200 p-3 sm:p-4 pb-safe md:pb-4 z-20 shadow-lg md:shadow-none">
         <textarea
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
           placeholder="Type a message..."
-          className="w-full px-3 md:px-4 py-2 md:py-3 bg-slate-50 rounded-xl border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none"
+          className="w-full px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none touch-manipulation mb-2"
           rows={2}
         />
 
@@ -1567,9 +1567,9 @@ const StudyGroups: React.FC = () => {
 
         <div className="border-t border-slate-100 pt-2 mt-2">
           {/* Icons Row + Send Button - Same line */}
-          <div className="flex items-center gap-1.5 sm:gap-2">
+          <div className="flex items-center gap-2 sm:gap-3">
             {/* Icons Row - Scrollable on mobile */}
-            <div className="flex gap-1 sm:gap-2 overflow-x-auto hide-scrollbar flex-1 min-w-0">
+            <div className="flex gap-1.5 sm:gap-2 overflow-x-auto hide-scrollbar flex-1 min-w-0 pb-1">
               {/* Emoji Picker */}
               <div className="relative flex-shrink-0">
                 <button
@@ -1577,10 +1577,11 @@ const StudyGroups: React.FC = () => {
                     setShowEmojiPicker(!showEmojiPicker);
                     setShowGifPicker(false);
                   }}
-                  className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation"
+                  className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
                   title="Add Emoji"
+                  aria-label="Add Emoji"
                 >
-                  <Smile size={16} className="sm:w-5 sm:h-5" />
+                  <Smile size={18} className="sm:w-5 sm:h-5" />
                 </button>
               {showEmojiPicker && (
                 <div
@@ -1616,10 +1617,11 @@ const StudyGroups: React.FC = () => {
                     searchGifs('trending');
                   }
                 }}
-                className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation"
+                className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
                 title="Add GIF"
+                aria-label="Add GIF"
               >
-                <ImageIcon size={16} className="sm:w-5 sm:h-5" />
+                <ImageIcon size={18} className="sm:w-5 sm:h-5" />
               </button>
               {showGifPicker && (
                 <div
@@ -1666,12 +1668,13 @@ const StudyGroups: React.FC = () => {
                 setShowEmojiPicker(false);
                 setShowGifPicker(false);
               }}
-              className={`p-1.5 sm:p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
+              className={`p-2 sm:p-2.5 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center ${
                 showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
               }`}
               title="Create Poll"
+              aria-label="Create Poll"
             >
-              <BarChart3 size={16} className="sm:w-5 sm:h-5" />
+              <BarChart3 size={18} className="sm:w-5 sm:h-5" />
             </button>
 
             {/* Tag Input */}
@@ -1683,26 +1686,28 @@ const StudyGroups: React.FC = () => {
                   if (input.style.display !== 'none') input.focus();
                 }
               }}
-              className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0"
+              className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center"
               title="Add Tags"
+              aria-label="Add Tags"
             >
-              <Hash size={16} className="sm:w-5 sm:h-5" />
+              <Hash size={18} className="sm:w-5 sm:h-5" />
             </button>
 
             {/* Location */}
             <button
               onClick={handleGetLocation}
-              className={`p-1.5 sm:p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
+              className={`p-2 sm:p-2.5 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center ${
                 location ? 'text-primary bg-indigo-50' : 'text-slate-600'
               }`}
               title="Add Location"
+              aria-label="Add Location"
             >
-              <MapPin size={16} className="sm:w-5 sm:h-5" />
+              <MapPin size={18} className="sm:w-5 sm:h-5" />
             </button>
 
             {/* Image Upload */}
-            <label className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0" title="Upload Image">
-              <Upload size={16} className="sm:w-5 sm:h-5" />
+            <label className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center" title="Upload Image" aria-label="Upload Image">
+              <Upload size={18} className="sm:w-5 sm:h-5" />
               <input 
                 type="file" 
                 accept="image/*" 
@@ -1712,8 +1717,8 @@ const StudyGroups: React.FC = () => {
             </label>
 
             {/* File Attachment */}
-            <label className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0" title="Attach File">
-              <FileText size={16} className="sm:w-5 sm:h-5" />
+            <label className="p-2 sm:p-2.5 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[44px] min-h-[44px] flex items-center justify-center" title="Attach File" aria-label="Attach File">
+              <FileText size={18} className="sm:w-5 sm:h-5" />
               <input 
                 type="file" 
                 accept=".pdf,.doc,.docx,.txt,.zip"
@@ -1727,7 +1732,7 @@ const StudyGroups: React.FC = () => {
           <button 
             onClick={handleSendMessage}
               disabled={(!messageText.trim() && !selectedGif && !imageFile && !pollQuestion && !attachmentFile) || uploading}
-              className="bg-primary hover:bg-indigo-700 text-white px-3 sm:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-1 sm:gap-2 justify-center touch-manipulation flex-shrink-0 shadow-sm"
+              className="bg-primary hover:bg-indigo-700 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-full text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 justify-center touch-manipulation flex-shrink-0 shadow-sm min-w-[60px] sm:min-w-auto min-h-[44px]"
             >
               {uploading ? (
                 <>

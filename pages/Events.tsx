@@ -543,13 +543,13 @@ const Events: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 relative">
+    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 relative w-full max-w-full overflow-x-hidden">
       <Header title="Events Hub" />
       
-      <div className="max-w-3xl mx-auto p-4 md:px-6">
+      <div className="max-w-3xl mx-auto p-3 sm:p-4 md:px-6 w-full">
         {/* Top Actions */}
-        <div className="flex justify-between items-center mb-4">
-             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar flex-1 mr-2">
+        <div className="flex justify-between items-center mb-4 gap-2">
+             <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar flex-1 mr-1 min-w-0">
                 {['All', 'Academic', 'Social', 'Sports', 'Career', 'Arts'].map((cat) => (
                     <button 
                     key={cat}
@@ -557,7 +557,7 @@ const Events: React.FC = () => {
                       setSelectedCategory(cat);
                       fetchEvents(cat);
                     }}
-                    className={`px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors ${
+                    className={`px-3 sm:px-4 py-1.5 rounded-full text-xs font-medium whitespace-nowrap transition-colors touch-manipulation flex-shrink-0 ${
                         selectedCategory === cat
                         ? 'bg-slate-800 text-white' 
                         : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -569,36 +569,37 @@ const Events: React.FC = () => {
             </div>
             <button 
                 onClick={() => setShowModal(true)}
-                className="bg-primary text-white p-2 rounded-full shadow-lg hover:bg-indigo-700 transition-colors"
+                className="bg-primary text-white p-2 sm:p-2.5 rounded-full shadow-lg hover:bg-indigo-700 transition-colors touch-manipulation flex-shrink-0"
+                aria-label="Create Event"
             >
-                <Plus size={24} />
+                <Plus size={20} className="sm:w-6 sm:h-6" />
             </button>
         </div>
 
         {/* Filter Controls */}
-        <div className="flex flex-wrap items-center gap-3 mb-4 p-4 bg-white rounded-xl border border-slate-200">
-          <div className="flex items-center gap-2">
-            <Filter size={18} className="text-slate-600" />
-            <span className="text-sm font-medium text-slate-700">Filters:</span>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 mb-4 p-3 sm:p-4 bg-white rounded-xl border border-slate-200">
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+            <Filter size={16} className="sm:w-[18px] sm:h-[18px] text-slate-600" />
+            <span className="text-xs sm:text-sm font-medium text-slate-700 hidden sm:inline">Filters:</span>
           </div>
           
           {userCollege && (
             <button
               onClick={() => setShowMyCollegeOnly(!showMyCollegeOnly)}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors touch-manipulation whitespace-nowrap ${
                 showMyCollegeOnly
                   ? 'bg-indigo-600 text-white'
                   : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
               }`}
             >
-              🎓 My College Only
+              🎓 My College
             </button>
           )}
           
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as 'date' | 'distance')}
-            className="px-4 py-2 rounded-lg text-sm font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200"
+            className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium bg-slate-100 text-slate-700 border border-slate-200 hover:bg-slate-200 touch-manipulation"
           >
             <option value="date">Sort by Date</option>
             <option value="distance">Sort by Distance</option>
@@ -606,14 +607,15 @@ const Events: React.FC = () => {
           
           <button
             onClick={() => setShowMapView(!showMapView)}
-            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
+            className={`px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm font-medium transition-colors flex items-center gap-1.5 sm:gap-2 touch-manipulation whitespace-nowrap ${
               showMapView
                 ? 'bg-indigo-600 text-white'
                 : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
             }`}
           >
-            <Map size={16} />
-            {showMapView ? 'List View' : 'Map View'}
+            <Map size={14} className="sm:w-4 sm:h-4" />
+            <span className="hidden sm:inline">{showMapView ? 'List View' : 'Map View'}</span>
+            <span className="sm:hidden">{showMapView ? 'List' : 'Map'}</span>
           </button>
         </div>
 
@@ -658,23 +660,23 @@ const Events: React.FC = () => {
             ).map(event => {
               const eventWithDist = event as Event & { distance?: number; distanceText?: string };
               return (
-                <div key={event.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col sm:flex-row hover:shadow-md transition-shadow cursor-pointer">
-                <div className="sm:w-48 h-48 sm:h-auto relative">
+                <div key={event.id} className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden flex flex-col md:flex-row hover:shadow-md transition-shadow cursor-pointer w-full max-w-full">
+                <div className="w-full md:w-48 h-48 md:h-auto relative flex-shrink-0">
                     <img src={event.image} alt={event.title} className="w-full h-full object-cover" />
-                    <div className="absolute top-3 left-3 bg-white/95 backdrop-blur-sm px-3 py-1.5 rounded-lg text-center shadow-sm">
-                    <span className="block text-xs font-bold text-red-500 uppercase">{event.date.split(' ')[0] || 'NOV'}</span>
-                    <span className="block text-lg font-bold text-slate-900 leading-none">{event.date.split(' ')[1] || '01'}</span>
+                    <div className="absolute top-2 left-2 sm:top-3 sm:left-3 bg-white/95 backdrop-blur-sm px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-center shadow-sm">
+                    <span className="block text-[10px] sm:text-xs font-bold text-red-500 uppercase">{event.date.split(' ')[0] || 'NOV'}</span>
+                    <span className="block text-base sm:text-lg font-bold text-slate-900 leading-none">{event.date.split(' ')[1] || '01'}</span>
                     </div>
                 </div>
                 
-                <div className="p-5 flex-1 flex flex-col justify-between">
+                <div className="p-4 sm:p-5 flex-1 flex flex-col justify-between min-w-0">
                     <div>
                     <div className="flex justify-between items-start">
                         <span className="inline-block px-2 py-1 bg-indigo-50 text-indigo-600 text-[10px] font-bold uppercase tracking-wider rounded mb-2">
                         {event.category}
                         </span>
                     </div>
-                    <h3 className="text-lg font-bold text-slate-800 mb-2 break-words">{event.title}</h3>
+                    <h3 className="text-base sm:text-lg font-bold text-slate-800 mb-2 break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{event.title}</h3>
                     <div className="space-y-1.5">
                         {eventWithDist.college && (
                           <div className="flex items-center text-indigo-600 text-sm font-medium">
@@ -783,10 +785,10 @@ const Events: React.FC = () => {
 
       {/* Create Event Modal */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 md:p-6">
-            <div className="bg-white rounded-3xl w-full max-w-md max-h-[90vh] overflow-y-auto">
-                <div className="p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
-                    <h2 className="text-xl font-bold text-slate-800">Create Event</h2>
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-3 sm:p-4 md:p-6 safe-top safe-bottom">
+            <div className="bg-white rounded-2xl sm:rounded-3xl w-full max-w-md max-h-[95vh] sm:max-h-[90vh] overflow-y-auto shadow-xl">
+                <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center sticky top-0 bg-white z-10">
+                    <h2 className="text-lg sm:text-xl font-bold text-slate-800">Create Event</h2>
                     <button 
                       onClick={() => {
                         setShowModal(false);
@@ -800,34 +802,34 @@ const Events: React.FC = () => {
                       <X size={24}/>
                     </button>
                 </div>
-                <form onSubmit={handleCreateEvent} className="p-6 space-y-4">
+                <form onSubmit={handleCreateEvent} className="p-4 sm:p-6 space-y-4">
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Event Title</label>
-                        <input required className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base" 
+                        <input required className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base touch-manipulation" 
                             onChange={e => setNewEvent({...newEvent, title: e.target.value})} />
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Date (e.g. NOV 15)</label>
-                            <input required className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base" 
+                            <input required className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base touch-manipulation" 
                                 onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-slate-700 mb-1">Time</label>
-                            <input required type="time" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base" 
+                            <input required type="time" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base touch-manipulation" 
                                 onChange={e => setNewEvent({...newEvent, time: e.target.value})} />
                         </div>
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Location</label>
-                        <input required className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base" 
+                        <input required className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base touch-manipulation" 
                             onChange={e => setNewEvent({...newEvent, location: e.target.value})} 
                             placeholder="e.g., Main Auditorium, Room 101" />
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">City or Google Maps Link</label>
                         <input 
-                            className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base" 
+                            className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base touch-manipulation" 
                             value={eventCity}
                             onChange={e => setEventCity(e.target.value)}
                             placeholder="e.g., Bangalore, Mumbai, Delhi OR https://maps.app.goo.gl/..."
@@ -843,7 +845,7 @@ const Events: React.FC = () => {
                     <div>
                         <label className="block text-sm font-medium text-slate-700 mb-1">Category</label>
                         <select 
-                          className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-base"
+                          className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base touch-manipulation"
                           value={newEvent.category}
                           onChange={e => setNewEvent({...newEvent, category: e.target.value as any})}
                         >
@@ -902,7 +904,7 @@ const Events: React.FC = () => {
                     <button 
                       type="submit" 
                       disabled={uploading}
-                      className="w-full py-3 bg-primary text-white font-bold rounded-xl mt-4 disabled:opacity-50 flex items-center justify-center gap-2"
+                      className="w-full py-3 sm:py-3.5 bg-primary text-white font-bold rounded-xl mt-4 disabled:opacity-50 flex items-center justify-center gap-2 touch-manipulation text-sm sm:text-base"
                     >
                       {uploading ? (
                         <>
