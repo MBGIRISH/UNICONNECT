@@ -59,7 +59,7 @@ const Navigation: React.FC = () => {
       </nav>
 
       {/* Mobile Bottom Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 px-1 sm:px-2 py-1.5 sm:py-2 z-50 pb-safe shadow-lg w-full max-w-full">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t-0 md:border-t border-slate-200 px-1 sm:px-2 py-1.5 sm:py-2 z-40 pb-safe shadow-lg w-full max-w-full">
         <div className="flex justify-around items-center w-full max-w-full">
           {navItems.map((item) => (
             <Link

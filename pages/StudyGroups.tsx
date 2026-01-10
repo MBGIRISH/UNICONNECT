@@ -1325,7 +1325,7 @@ const StudyGroups: React.FC = () => {
       )}
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-50 pb-32 md:pb-4 w-full max-w-full">
+      <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-50 pb-32 md:pb-4 w-full max-w-full min-h-0">
         {messages.length === 0 && (
           <div className="text-center text-slate-400 text-sm mt-10">
             <Bot size={48} className="mx-auto text-indigo-300 mb-3" />
@@ -1513,36 +1513,36 @@ const StudyGroups: React.FC = () => {
           </div>
         )}
 
-      {/* Input Area - Fixed at bottom on mobile, sticky on desktop */}
-      <div className="fixed md:sticky bottom-0 left-0 right-0 bg-white border-t border-slate-200 p-3 sm:p-4 pb-safe md:pb-4 z-20 shadow-lg md:shadow-none w-full max-w-full">
-        {/* Text Input */}
-        <div className="flex items-end gap-2 sm:gap-3 mb-2">
+      {/* Input Area - Fixed at bottom on mobile above nav bar, sticky on desktop - no gap */}
+      <div className="fixed md:sticky bottom-[56px] md:bottom-0 left-0 right-0 bg-white border-t border-slate-200 md:border-t border-b border-slate-200 md:border-b-0 p-2 sm:p-2.5 md:p-4 pb-2 sm:pb-2.5 md:pb-4 z-50 shadow-none md:shadow-none w-full max-w-full" style={{ marginBottom: 0 }}>
+        {/* Text Input with Send Button */}
+        <div className="flex items-end gap-2 sm:gap-3 mb-1 sm:mb-1.5 w-full max-w-full">
           <textarea
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
             placeholder="Type a message..."
-            className="flex-1 px-3 sm:px-4 py-2.5 sm:py-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none touch-manipulation min-h-[44px] max-h-32"
+            className="flex-1 px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base focus:outline-none focus:ring-2 focus:ring-primary/50 resize-none touch-manipulation min-h-[40px] sm:min-h-[44px] max-h-28 sm:max-h-32 min-w-0"
             rows={1}
-            style={{ maxWidth: '100%' }}
           />
-          {/* Send Button - Next to textarea on mobile */}
+          {/* Send Button - Always visible next to textarea, prominent on mobile */}
           <button 
             onClick={handleSendMessage}
             disabled={(!messageText.trim() && !selectedGif && !imageFile && !pollQuestion && !attachmentFile) || uploading}
-            className="bg-primary hover:bg-indigo-700 text-white p-2.5 sm:p-3 rounded-full font-semibold transition-colors disabled:opacity-50 flex items-center justify-center touch-manipulation flex-shrink-0 shadow-sm min-w-[44px] min-h-[44px] sm:min-w-[60px] sm:px-4"
+            className="bg-primary hover:bg-indigo-700 active:bg-indigo-800 text-white p-2 sm:p-2.5 rounded-full font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center touch-manipulation flex-shrink-0 shadow-lg hover:shadow-xl min-w-[40px] min-h-[40px] sm:min-w-[44px] sm:min-h-[44px] active:scale-95"
             aria-label="Send message"
+            title="Send message"
           >
             {uploading ? (
-              <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              <div className="w-4 h-4 sm:w-5 sm:h-5 border-2 border-white border-t-transparent rounded-full animate-spin flex-shrink-0" />
             ) : (
-              <Send size={18} className="sm:w-5 sm:h-5" />
+              <Send size={18} className="sm:w-5 sm:h-5 flex-shrink-0" />
             )}
           </button>
         </div>
 
         {/* Poll Creator */}
         {showPollCreator && (
-          <div className="mb-2 p-3 bg-slate-50 rounded-xl border border-slate-200">
+          <div className="mb-1 sm:mb-1.5 p-2.5 sm:p-3 bg-slate-50 rounded-xl border border-slate-200 w-full max-w-full">
             <div className="flex items-center justify-between mb-2">
               <h4 className="font-semibold text-sm text-slate-700">Create Poll</h4>
               <button 
@@ -1597,8 +1597,8 @@ const StudyGroups: React.FC = () => {
           </div>
         )}
 
-        {/* Icons Row - Toolbar */}
-        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto hide-scrollbar w-full pb-1">
+        {/* Icons Row - Toolbar - Compact on mobile */}
+        <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto hide-scrollbar w-full max-w-full -mx-1 px-1 flex-nowrap pt-0.5">
           {/* Emoji Picker */}
           <div className="relative flex-shrink-0">
             <button
@@ -1606,16 +1606,16 @@ const StudyGroups: React.FC = () => {
                 setShowEmojiPicker(!showEmojiPicker);
                 setShowGifPicker(false);
               }}
-              className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center"
+              className="p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center flex-shrink-0"
               title="Add Emoji"
               aria-label="Add Emoji"
             >
-              <Smile size={18} className="sm:w-5 sm:h-5" />
+              <Smile size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
             </button>
             {showEmojiPicker && (
               <div
                 ref={emojiPickerRef}
-                className="fixed sm:absolute bottom-24 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50 max-h-48 overflow-y-auto"
+                className="fixed sm:absolute bottom-[105px] sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[60] max-h-48 overflow-y-auto"
                 style={{ width: 'min(280px, calc(100vw - 1rem))' }}
               >
                 <div className="grid grid-cols-5 gap-2">
@@ -1646,16 +1646,16 @@ const StudyGroups: React.FC = () => {
                   searchGifs('trending');
                 }
               }}
-              className="p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center"
+              className="p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full text-primary cursor-pointer transition-colors touch-manipulation min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center flex-shrink-0"
               title="Add GIF"
               aria-label="Add GIF"
             >
-              <ImageIcon size={18} className="sm:w-5 sm:h-5" />
+              <ImageIcon size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
             </button>
             {showGifPicker && (
               <div
                 ref={gifPickerRef}
-                className="fixed sm:absolute bottom-24 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
+                className="fixed sm:absolute bottom-[105px] sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[60]"
                 style={{ width: 'min(320px, calc(100vw - 1rem))', maxHeight: '400px' }}
               >
                 <input
@@ -1697,13 +1697,13 @@ const StudyGroups: React.FC = () => {
               setShowEmojiPicker(false);
               setShowGifPicker(false);
             }}
-            className={`p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center ${
+            className={`p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center ${
               showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
             }`}
             title="Create Poll"
             aria-label="Create Poll"
           >
-            <BarChart3 size={18} className="sm:w-5 sm:h-5" />
+            <BarChart3 size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
           </button>
 
           {/* Tag Input */}
@@ -1715,28 +1715,28 @@ const StudyGroups: React.FC = () => {
                 if (input.style.display !== 'none') input.focus();
               }
             }}
-            className="p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center"
+            className="p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center"
             title="Add Tags"
             aria-label="Add Tags"
           >
-            <Hash size={18} className="sm:w-5 sm:h-5" />
+            <Hash size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
           </button>
 
           {/* Location */}
           <button
             onClick={handleGetLocation}
-            className={`p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center ${
+            className={`p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center ${
               location ? 'text-primary bg-indigo-50' : 'text-slate-600'
             }`}
             title="Add Location"
             aria-label="Add Location"
           >
-            <MapPin size={18} className="sm:w-5 sm:h-5" />
+            <MapPin size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
           </button>
 
           {/* Image Upload */}
-          <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center" title="Upload Image" aria-label="Upload Image">
-            <Upload size={18} className="sm:w-5 sm:h-5" />
+          <label className="p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center" title="Upload Image" aria-label="Upload Image">
+            <Upload size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
             <input 
               type="file" 
               accept="image/*" 
@@ -1746,8 +1746,8 @@ const StudyGroups: React.FC = () => {
           </label>
 
           {/* File Attachment */}
-          <label className="p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[40px] min-h-[40px] flex items-center justify-center" title="Attach File" aria-label="Attach File">
-            <FileText size={18} className="sm:w-5 sm:h-5" />
+          <label className="p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center" title="Attach File" aria-label="Attach File">
+            <FileText size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
             <input 
               type="file" 
               accept=".pdf,.doc,.docx,.txt,.zip"
@@ -1756,8 +1756,7 @@ const StudyGroups: React.FC = () => {
             />
           </label>
         </div>
-      </div>
-        
+
         {/* Inline Tag Input */}
         <input
           id="tag-input"
