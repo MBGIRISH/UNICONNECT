@@ -72,11 +72,15 @@ export function listenToConversations(
   const q = query(
     collection(db, 'conversations'),
     where('participants', 'array-contains', userId),
-    orderBy('updatedAt', 'desc'),
     limit(100)
   );
   return onSnapshot(q, (snap) => {
     const convs = snap.docs.map((d) => ({ id: d.id, ...(d.data() as any) })) as ConversationSummary[];
+    convs.sort((a: any, b: any) => {
+      const ta = a.updatedAt?.toMillis?.() || a.lastMessageAt?.toMillis?.() || 0;
+      const tb = b.updatedAt?.toMillis?.() || b.lastMessageAt?.toMillis?.() || 0;
+      return tb - ta;
+    });
     cb(convs);
   });
 }

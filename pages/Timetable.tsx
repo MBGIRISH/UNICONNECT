@@ -5,6 +5,8 @@ import { useAuth } from '../App';
 import { db } from '../firebaseConfig';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, where, serverTimestamp } from 'firebase/firestore';
 import { addNotification } from '../services/notificationService';
+import ConfirmDialog from '../components/ConfirmDialog';
+import TimePicker12h from '../components/TimePicker12h';
 
 interface ClassItem {
   id: string;
@@ -29,6 +31,7 @@ const Timetable: React.FC = () => {
   const [ongoingClass, setOngoingClass] = useState<ClassItem | null>(null);
   const [notifiedClasses, setNotifiedClasses] = useState<Set<string>>(new Set());
   const [lastNotificationDate, setLastNotificationDate] = useState<string>('');
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   
   const [newClass, setNewClass] = useState({
     subject: '',
@@ -235,8 +238,6 @@ const Timetable: React.FC = () => {
   };
 
   const handleDeleteClass = async (id: string) => {
-    if (!confirm('Delete this class?')) return;
-
     try {
       if (db) {
         await deleteDoc(doc(db, 'timetable', id));
@@ -417,8 +418,9 @@ const Timetable: React.FC = () => {
                           </div>
 
                           <button
-                            onClick={() => handleDeleteClass(classItem.id)}
-                            className="text-red-500 hover:text-red-700 p-1"
+                            onClick={() => setConfirmDeleteId(classItem.id)}
+                            className="text-red-500 hover:text-red-700 p-1 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+                            aria-label="Delete class"
                           >
                             <Trash2 size={16} />
                           </button>
@@ -467,28 +469,20 @@ const Timetable: React.FC = () => {
                 </select>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    Start Time
-                  </label>
-                  <input
-                    type="time"
+                  <TimePicker12h
+                    label="Start Time"
                     value={newClass.startTime}
-                    onChange={(e) => setNewClass({ ...newClass, startTime: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    onChange={(val) => setNewClass({ ...newClass, startTime: val })}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
-                    End Time
-                  </label>
-                  <input
-                    type="time"
+                  <TimePicker12h
+                    label="End Time"
                     value={newClass.endTime}
-                    onChange={(e) => setNewClass({ ...newClass, endTime: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary bg-white dark:bg-slate-700 text-slate-900 dark:text-white"
+                    onChange={(val) => setNewClass({ ...newClass, endTime: val })}
                   />
                 </div>
               </div>
@@ -555,6 +549,21 @@ const Timetable: React.FC = () => {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        isOpen={!!confirmDeleteId}
+        title="Delete this class?"
+        description="This action cannot be undone."
+        confirmText="Delete"
+        cancelText="Cancel"
+        danger
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={async () => {
+          const id = confirmDeleteId;
+          setConfirmDeleteId(null);
+          if (id) await handleDeleteClass(id);
+        }}
+      />
     </div>
   );
 };

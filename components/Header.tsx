@@ -44,7 +44,6 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
     const q = query(
       collection(db, 'conversations'),
       where('participants', 'array-contains', currentUser.uid),
-      orderBy('updatedAt', 'desc'),
       limit(200)
     );
 

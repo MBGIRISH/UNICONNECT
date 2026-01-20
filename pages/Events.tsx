@@ -10,6 +10,7 @@ import { uploadEventCover } from '../services/cloudinaryService';
 import { getEventDistance, formatDistance, getCityCoordinates, getUserLocation, parseLocationInput, getGoogleMapsUrl } from '../services/locationService';
 import { getUserProfile } from '../services/profileService';
 import EventMap from '../components/EventMap';
+import TimePicker12h from '../components/TimePicker12h';
 
 // Comprehensive colleges list - ALL IITs, NITs, and Karnataka Engineering Colleges
 const POPULAR_COLLEGES = [
@@ -357,7 +358,8 @@ const Events: React.FC = () => {
           e.id === eventId ? { ...e, attendees: (e.attendees || 1) - 1 } : e
         ));
         
-        alert('RSVP cancelled');
+        setSuccessMessage('RSVP cancelled');
+        setShowSuccessModal(true);
       } else {
         // Add interest (RSVP)
         await setDoc(attendeeRef, {
@@ -815,9 +817,11 @@ const Events: React.FC = () => {
                                 onChange={e => setNewEvent({...newEvent, date: e.target.value})} />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-slate-700 mb-1">Time</label>
-                            <input required type="time" className="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm sm:text-base touch-manipulation" 
-                                onChange={e => setNewEvent({...newEvent, time: e.target.value})} />
+                            <TimePicker12h
+                              label="Time"
+                              value={(newEvent.time as string) || '09:00'}
+                              onChange={(val) => setNewEvent({ ...newEvent, time: val })}
+                            />
                         </div>
                     </div>
                     <div>

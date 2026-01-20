@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapPin, Globe, Phone, Loader2, Upload, X, GraduationCap } from 'lucide-react';
+import { MapPin, Globe, Phone, Loader2, Upload, X, GraduationCap, Search } from 'lucide-react';
 import { auth } from '../firebaseConfig';
 import { updateUserProfile } from '../services/profileService';
 import { uploadAndUpdateAvatar } from '../services/profileService';
@@ -126,6 +126,7 @@ const POPULAR_COLLEGES = [
 const Onboarding: React.FC = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [collegeSearch, setCollegeSearch] = useState('');
   const [avatarFile, setAvatarFile] = useState<File | null>(null);
   const [avatarPreview, setAvatarPreview] = useState<string>('');
   const [formData, setFormData] = useState({
@@ -141,6 +142,11 @@ const Onboarding: React.FC = () => {
     instagram: ''
   });
   const navigate = useNavigate();
+  const filteredColleges = useMemo(() => {
+    const q = collegeSearch.trim().toLowerCase();
+    if (!q) return POPULAR_COLLEGES;
+    return POPULAR_COLLEGES.filter((c) => c.toLowerCase().includes(q));
+  }, [collegeSearch]);
 
   const user = auth.currentUser;
 
@@ -333,6 +339,17 @@ const Onboarding: React.FC = () => {
                   <label className="block text-sm font-medium text-slate-700 mb-1">
                     College
                   </label>
+                  {/* Search bar for accuracy */}
+                  <div className="relative mb-3">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+                    <input
+                      type="text"
+                      value={collegeSearch}
+                      onChange={(e) => setCollegeSearch(e.target.value)}
+                      placeholder="Search your college..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
+                    />
+                  </div>
                   <div className="relative">
                     <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <select
@@ -341,13 +358,16 @@ const Onboarding: React.FC = () => {
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none"
                     >
                       <option value="">Select your college...</option>
-                      {POPULAR_COLLEGES.map((college) => (
+                      {filteredColleges.map((college) => (
                         <option key={college} value={college}>
                           {college}
                         </option>
                       ))}
                     </select>
                   </div>
+                  <p className="text-xs text-slate-500 mt-2">
+                    Tip: Search and then select from the list for best accuracy.
+                  </p>
                 </div>
 
                 {formData.college === 'Other (Enter Your College)' && (
