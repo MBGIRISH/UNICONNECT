@@ -7,7 +7,10 @@ import { generateStudyHelp } from '../services/geminiService';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit, getDocs, doc, updateDoc, increment, setDoc, getDoc, where } from 'firebase/firestore';
-import { uploadImageToCloudinary } from '../services/cloudinaryService';
+import ImageLightbox from '../components/chat/ImageLightbox';
+import LocationCard from '../components/chat/LocationCard';
+import FileAttachmentCard from '../components/chat/FileAttachmentCard';
+import { uploadChatImageToCloudinary, uploadFileToCloudinary } from '../services/cloudinaryService';
 
 const StudyGroups: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<StudyGroup | null>(null);
@@ -47,6 +50,8 @@ const StudyGroups: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
+  const [imageToPreview, setImageToPreview] = useState<string | null>(null);
+  const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
   const [newGroup, setNewGroup] = useState({
     name: '',
@@ -290,12 +295,13 @@ const StudyGroups: React.FC = () => {
                     console.log('📨 Last message:', { id: msgs[msgs.length - 1].id, text: msgs[msgs.length - 1].text?.substring(0, 30), senderName: msgs[msgs.length - 1].senderName });
                 }
                 setMessages(msgs);
-                // Scroll to bottom after messages are rendered
+                // WhatsApp-like: auto-scroll only if user is already near bottom
                 setTimeout(() => {
-                    if (messagesEndRef.current) {
-                        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
-                    }
-                }, 300);
+                  const nearBottom = (window as any).__groupsNearBottom ?? true;
+                  if (nearBottom && messagesEndRef.current) {
+                    messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+                  }
+                }, 0);
             }, 
             (error) => {
                 console.error("❌ Firestore Listener Error:", error);
@@ -863,61 +869,13 @@ const StudyGroups: React.FC = () => {
           setSelectedGif(null);
         }
         
-        // Upload image if present
+        // Upload image if present (Cloudinary)
         if (currentImageFile) {
           try {
-            console.log('📤 Uploading image:', currentImageFile.name, currentImageFile.size, 'bytes');
-            const formData = new FormData();
-            formData.append('file', currentImageFile);
-            formData.append('upload_preset', 'uniconnect_uploads');
-            formData.append('folder', `uniconnect/groups/${selectedGroup.id}/images`);
-            // Note: Don't add resource_type for images - Cloudinary auto-detects
-            
-            console.log('📋 Upload parameters:', {
-              preset: 'uniconnect_uploads',
-              folder: `uniconnect/groups/${selectedGroup.id}/images`,
-              fileName: currentImageFile.name,
-              fileSize: currentImageFile.size
-            });
-            
-            const response = await fetch(`https://api.cloudinary.com/v1_1/dlnlwudgr/image/upload`, {
-              method: 'POST',
-              body: formData,
-            });
-            
-            const responseData = await response.json().catch(async () => {
-              const text = await response.text().catch(() => 'Unknown error');
-              return { error: { message: text } };
-            });
-            
-            if (response.ok) {
-              imageUrl = responseData.secure_url;
-              console.log('✅ Image uploaded successfully:', imageUrl);
-            } else {
-              console.error('❌ Image upload error:', {
-                status: response.status,
-                statusText: response.statusText,
-                error: responseData
-              });
-              
-              // Detailed error message based on Cloudinary response
-              let errorMsg = `Image upload failed (${response.status})`;
-              
-              if (responseData.error?.message) {
-                errorMsg = responseData.error.message;
-              } else if (response.status === 400) {
-                // 400 usually means preset is "Signed" or doesn't exist
-                errorMsg = `❌ Cloudinary 400 Error!\n\nYour upload preset 'uniconnect_uploads' is either:\n1. Set to "Signed" (MUST be "Unsigned")\n2. Doesn't exist\n3. Not configured correctly\n\n🔧 FIX:\n1. Go to: https://cloudinary.com/console/settings/upload\n2. Edit preset: uniconnect_uploads\n3. General tab → Signing Mode → Change to "Unsigned"\n4. Optimize and Deliver tab → Access control → Set to "Public"\n5. Click "Save"`;
-              } else if (response.status === 401) {
-                errorMsg = 'Cloudinary authentication failed. Check upload preset is set to "Unsigned".';
-              } else if (response.status === 403) {
-                errorMsg = 'Access denied. Check Cloudinary preset "Access control" is set to "Public".';
-              } else if (response.status === 404) {
-                errorMsg = 'Cloudinary preset not found. Create preset "uniconnect_uploads" with "Unsigned" signing mode.';
-              }
-              
-              throw new Error(errorMsg);
-            }
+            imageUrl = await uploadChatImageToCloudinary(
+              currentImageFile,
+              `uniconnect/chat/groups/${selectedGroup.id}/${user.uid}`
+            );
             setImageFile(null);
             setImagePreview('');
           } catch (error: any) {
@@ -926,14 +884,16 @@ const StudyGroups: React.FC = () => {
           }
         }
 
-        // Upload attachment if present
+        // Upload attachment if present (Cloudinary raw)
         if (currentAttachmentFile) {
           try {
-            const postId = `temp_${Date.now()}`;
-            const uploaded = await uploadImageToCloudinary(currentAttachmentFile, `uniconnect/groups/${selectedGroup.id}/attachments/${postId}`);
-            attachmentUrl = uploaded;
+            const uploaded = await uploadFileToCloudinary(
+              currentAttachmentFile,
+              `uniconnect/chat/groups/${selectedGroup.id}/${user.uid}/files`
+            );
+            attachmentUrl = uploaded.url;
             attachmentName = currentAttachmentFile.name;
-            attachmentType = currentAttachmentFile.type.split('/')[0] || 'file';
+            attachmentType = currentAttachmentFile.type || 'application/octet-stream';
             setAttachmentFile(null);
             setAttachmentPreview(null);
           } catch (error: any) {
@@ -968,6 +928,7 @@ const StudyGroups: React.FC = () => {
         if (text.trim() || imageUrl || attachmentUrl || stickerUrl || poll) {
           // Add message to Firestore
           const messageData: any = {
+            messageType: poll ? 'poll' : (stickerUrl ? 'image' : (imageUrl ? 'image' : (attachmentUrl ? 'file' : (currentLocation ? 'location' : 'text')))),
             text: text || '',
             senderId: user.uid,
             senderName: user.displayName || 'User',
@@ -984,7 +945,8 @@ const StudyGroups: React.FC = () => {
             messageData.attachments = [{
               name: attachmentName,
               url: attachmentUrl,
-              type: attachmentType
+              type: attachmentType,
+              size: currentAttachmentFile?.size
             }];
           }
           
@@ -1040,7 +1002,9 @@ const StudyGroups: React.FC = () => {
         const errorMessage = e.message || 'Failed to send message. Please try again.';
         
         // Show detailed error to user
-        alert(`❌ Upload Failed!\n\n${errorMessage}\n\nPlease check:\n1. Cloudinary preset is set to "Unsigned"\n2. Access control is set to "Public"\n3. File size is under 10MB\n4. Internet connection is stable`);
+        alert(
+          `❌ Upload Failed!\n\n${errorMessage}\n\nSupported image types: JPG, PNG, WEBP\nMax image size: 10MB\nMax file size: 20MB\n\nTip: If you're on iPhone, your photo may be HEIC—share as JPG/PNG or change Camera → Formats → Most Compatible.`
+        );
         
         // Restore message text if upload failed
         setMessageText(text);
@@ -1058,9 +1022,9 @@ const StudyGroups: React.FC = () => {
   // Group List View
   if (!selectedGroup) {
     return (
-      <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 w-full max-w-full overflow-x-hidden">
+      <div className="min-h-screen bg-slate-50 pb-4 md:pb-4 lg:pb-0 w-full max-w-full overflow-x-hidden">
         <Header title="Study Groups" />
-        <div className="max-w-3xl mx-auto p-3 sm:p-4 md:px-6 w-full">
+        <div className="max-w-3xl mx-auto p-3 sm:p-4 md:px-6 lg:px-8 w-full">
           {/* Action Buttons */}
           <div className="flex gap-2 mb-4">
             <button 
@@ -1277,7 +1241,7 @@ const StudyGroups: React.FC = () => {
 
   // Chat View
   return (
-    <div className="h-screen flex flex-col bg-white md:ml-64 relative z-0 w-full max-w-full overflow-hidden">
+    <div className="h-screen flex flex-col bg-white relative z-0 w-full max-w-full overflow-hidden">
       {/* Chat Header */}
       <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-200 flex justify-between items-center bg-white shadow-sm z-10 w-full max-w-full safe-top">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
@@ -1325,7 +1289,14 @@ const StudyGroups: React.FC = () => {
       )}
 
       {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-50 pb-32 md:pb-4 w-full max-w-full min-h-0">
+      <div
+        className="flex-1 overflow-y-auto p-3 sm:p-4 bg-slate-50 pb-32 md:pb-4 w-full max-w-full min-h-0"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          const dist = el.scrollHeight - el.scrollTop - el.clientHeight;
+          (window as any).__groupsNearBottom = dist < 120;
+        }}
+      >
         {messages.length === 0 && (
           <div className="text-center text-slate-400 text-sm mt-10">
             <Bot size={48} className="mx-auto text-indigo-300 mb-3" />
@@ -1347,9 +1318,9 @@ const StudyGroups: React.FC = () => {
           const isMe = msg.senderId === user?.uid || msg.senderId === 'me';
           return (
             <div key={msg.id || `msg-${index}`} className={`flex ${isMe ? 'justify-end' : 'justify-start'} mb-3`}>
-                <div className={`max-w-[85%] md:max-w-[70%] rounded-2xl p-3.5 text-sm shadow-sm ${
+                <div className={`max-w-[88%] md:max-w-[70%] rounded-2xl p-3.5 text-sm shadow-sm ${
                 isMe 
-                    ? 'bg-primary text-white rounded-br-none' 
+                    ? 'bg-primary text-white rounded-br-md' 
                     : msg.isAi 
                     ? 'bg-white border-2 border-indigo-100 text-slate-800 rounded-bl-none'
                     : 'bg-white border border-slate-100 text-slate-800 rounded-bl-none'
@@ -1360,32 +1331,34 @@ const StudyGroups: React.FC = () => {
                     Study Buddy
                     </div>
                 )}
-                {!isMe && !msg.isAi && <p className="text-[10px] font-bold text-slate-400 mb-1">{msg.senderName || 'Unknown'}</p>}
+                {/* WhatsApp-style sender label for group chats */}
+                {!isMe && !msg.isAi && (
+                  <p className="text-[11px] font-semibold text-slate-500 mb-1">
+                    {msg.senderName || 'Unknown'}
+                  </p>
+                )}
                 
                 {msg.imageUrl && (
-                  <img 
-                    src={msg.imageUrl} 
-                    alt="Shared" 
-                    className="rounded-lg mb-2 max-w-full cursor-pointer hover:opacity-90 transition-opacity"
-                    onClick={() => window.open(msg.imageUrl, '_blank')}
-                  />
+                  <button onClick={() => setImageToPreview(msg.imageUrl || null)} className="block mb-2" aria-label="Open image">
+                    <img 
+                      src={msg.imageUrl} 
+                      alt="Shared" 
+                      className="rounded-2xl max-w-full cursor-pointer hover:opacity-90 transition-opacity border border-slate-200"
+                    />
+                  </button>
                 )}
                 {(msg as any).attachments && (msg as any).attachments.length > 0 && (
                   <div className="mb-2 space-y-2">
                     {(msg as any).attachments.map((att: any, idx: number) => (
-                      <div key={idx} className="p-3 bg-slate-100 rounded-lg flex items-center gap-2">
-                        <FileText size={20} className="text-primary flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-slate-700 truncate">{att.name || 'Attachment'}</p>
-                          <button
-                            onClick={() => handleDownload(att.url, att.name || 'attachment')}
-                            className="text-xs text-primary hover:underline mt-1 flex items-center gap-1"
-                          >
-                            <Download size={12} />
-                            Download
-                          </button>
-                        </div>
-                      </div>
+                      <FileAttachmentCard
+                        key={idx}
+                        file={{
+                          url: att.url,
+                          name: att.name || 'Attachment',
+                          size: att.size,
+                          mimeType: att.type,
+                        }}
+                      />
                     ))}
                   </div>
                 )}
@@ -1439,7 +1412,7 @@ const StudyGroups: React.FC = () => {
                   </div>
                 )}
                 
-                {msg.text && <p className="leading-relaxed whitespace-pre-wrap">{msg.text}</p>}
+                {msg.text && <p className="leading-relaxed whitespace-pre-wrap break-words">{msg.text}</p>}
                 
                 {/* Tags */}
                 {(msg as any).tags && (msg as any).tags.length > 0 && (
@@ -1453,10 +1426,9 @@ const StudyGroups: React.FC = () => {
                 )}
                 
                 {/* Location */}
-                {(msg as any).location && (
-                  <div className="mt-2 flex items-center gap-1 text-xs text-slate-500">
-                    <MapPin size={12} />
-                    <span>{(msg as any).location.name}</span>
+                {(msg as any).location && (msg as any).location.latitude && (
+                  <div className="mt-2">
+                    <LocationCard location={(msg as any).location} />
                   </div>
                 )}
                 
@@ -1514,10 +1486,11 @@ const StudyGroups: React.FC = () => {
         )}
 
       {/* Input Area - Fixed at bottom on mobile above nav bar, sticky on desktop - no gap */}
-      <div className="fixed md:sticky bottom-[56px] md:bottom-0 left-0 right-0 bg-white border-t border-slate-200 md:border-t border-b border-slate-200 md:border-b-0 p-2 sm:p-2.5 md:p-4 pb-2 sm:pb-2.5 md:pb-4 z-50 shadow-none md:shadow-none w-full max-w-full" style={{ marginBottom: 0 }}>
+      <div className="fixed md:sticky bottom-0 left-0 right-0 bg-white border-t border-slate-200 md:border-t border-b border-slate-200 md:border-b-0 p-2 sm:p-2.5 md:p-4 pb-2 sm:pb-2.5 md:pb-4 z-50 shadow-none md:shadow-none w-full max-w-full" style={{ marginBottom: 0 }}>
         {/* Text Input with Send Button */}
         <div className="flex items-end gap-2 sm:gap-3 mb-1 sm:mb-1.5 w-full max-w-full">
           <textarea
+            ref={messageInputRef}
             value={messageText}
             onChange={(e) => setMessageText(e.target.value)}
             placeholder="Type a message..."
@@ -1623,7 +1596,21 @@ const StudyGroups: React.FC = () => {
                     <button
                       key={index}
                       onClick={() => {
-                        setMessageText(prev => prev + emoji);
+                        // Insert emoji at cursor position (WhatsApp-like)
+                        const input = messageInputRef.current;
+                        if (!input) {
+                          setMessageText(prev => prev + emoji);
+                        } else {
+                          const start = input.selectionStart ?? messageText.length;
+                          const end = input.selectionEnd ?? messageText.length;
+                          const next = messageText.slice(0, start) + emoji + messageText.slice(end);
+                          setMessageText(next);
+                          requestAnimationFrame(() => {
+                            input.focus();
+                            const caret = start + emoji.length;
+                            input.setSelectionRange(caret, caret);
+                          });
+                        }
                         setShowEmojiPicker(false);
                       }}
                       className="text-xl sm:text-2xl hover:bg-slate-50 rounded-lg p-1.5 sm:p-2 transition-colors touch-manipulation"
@@ -1739,7 +1726,7 @@ const StudyGroups: React.FC = () => {
             <Upload size={16} className="sm:w-5 sm:h-5 flex-shrink-0" />
             <input 
               type="file" 
-              accept="image/*" 
+              accept="image/jpeg,image/png,image/webp"
               onChange={handleImageSelect}
               className="hidden"
             />
@@ -1936,6 +1923,12 @@ const StudyGroups: React.FC = () => {
         isOpen={showSuccessModal}
         onClose={() => setShowSuccessModal(false)}
         message={successMessage}
+      />
+
+      <ImageLightbox
+        isOpen={!!imageToPreview}
+        src={imageToPreview}
+        onClose={() => setImageToPreview(null)}
       />
     </div>
   );

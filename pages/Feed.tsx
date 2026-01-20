@@ -540,10 +540,10 @@ const Feed: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 pb-4 md:pb-4 lg:pb-0 w-full max-w-full overflow-x-hidden">
       <Header title="Campus Feed" />
       
-      <div className="max-w-2xl mx-auto pt-3 sm:pt-4 px-3 sm:px-4 md:px-6 w-full">
+      <div className="max-w-2xl mx-auto pt-3 sm:pt-4 px-3 sm:px-4 md:px-6 lg:px-8 w-full">
         {/* Create Post Widget */}
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 sm:p-4 mb-4 sm:mb-6 w-full max-w-full overflow-hidden">
           <div className="flex gap-2 sm:gap-3 mb-3">

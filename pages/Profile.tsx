@@ -363,10 +363,10 @@ const Profile: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 pb-4 md:pb-4 lg:pb-0 w-full max-w-full overflow-x-hidden">
       <Header title={isOwnProfile ? "My Profile" : profile.displayName} showSearchBar={true} />
       
-      <div className="max-w-4xl mx-auto p-3 sm:p-4 md:p-6 w-full">
+      <div className="max-w-4xl mx-auto p-3 sm:p-4 md:p-6 lg:px-8 w-full">
         <div className="bg-white md:rounded-3xl overflow-hidden shadow-sm border border-slate-100">
           {/* Banner */}
           <div className="relative h-32 md:h-48 overflow-hidden">

@@ -543,10 +543,10 @@ const Events: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 relative w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 pb-4 md:pb-4 lg:pb-0 relative w-full max-w-full overflow-x-hidden">
       <Header title="Events Hub" />
       
-      <div className="max-w-3xl mx-auto p-3 sm:p-4 md:px-6 w-full">
+      <div className="max-w-3xl mx-auto p-3 sm:p-4 md:px-6 lg:px-8 w-full">
         {/* Top Actions */}
         <div className="flex justify-between items-center mb-4 gap-2">
              <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar flex-1 mr-1 min-w-0">

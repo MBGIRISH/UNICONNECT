@@ -266,10 +266,10 @@ const Marketplace: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20 md:pb-0 md:ml-64 w-full max-w-full overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 pb-4 md:pb-4 lg:pb-0 w-full max-w-full overflow-x-hidden">
       <Header title="Marketplace" />
       
-      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:px-6 w-full">
+      <div className="max-w-6xl mx-auto p-3 sm:p-4 md:px-6 lg:px-8 w-full">
         <div className="flex justify-between items-center mb-6">
           <h2 className="text-lg font-semibold text-slate-800 hidden md:block">Browse Listings</h2>
           <div className="flex gap-3 w-full md:w-auto justify-end">

@@ -1,34 +1,27 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Send, Image as ImageIcon, ArrowLeft, Search, MessageCircle } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Send, Image as ImageIcon, ArrowLeft, MessageCircle, Smile, Paperclip, MapPin } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db, auth } from '../firebaseConfig';
 import { 
-  collection, 
-  query, 
-  where, 
-  orderBy, 
-  onSnapshot, 
-  addDoc, 
-  serverTimestamp,
-  getDocs,
-  or,
-  limit,
-  updateDoc,
   doc,
-  getDoc
+  updateDoc,
 } from 'firebase/firestore';
-import { uploadImageToCloudinary } from '../services/cloudinaryService';
 import { getUserProfile } from '../services/profileService';
-
-interface Message {
-  id: string;
-  text: string;
-  senderId: string;
-  receiverId: string;
-  imageUrl?: string;
-  createdAt: any;
-  read: boolean;
-}
+import {
+  ensureConversation,
+  getConversationId,
+  listenToConversations,
+  listenToDirectMessages,
+  markConversationRead,
+  sendDirectMessage,
+  type ConversationSummary,
+  type DirectMessage,
+} from '../services/chatService';
+import EmojiPicker from '../components/chat/EmojiPicker';
+import ImageLightbox from '../components/chat/ImageLightbox';
+import LocationCard, { type SharedLocation } from '../components/chat/LocationCard';
+import FileAttachmentCard from '../components/chat/FileAttachmentCard';
+import { uploadChatImageToCloudinary, uploadFileToCloudinary } from '../services/cloudinaryService';
 
 interface Conversation {
   userId: string;
@@ -44,13 +37,24 @@ const Messages: React.FC = () => {
   const navigate = useNavigate();
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [selectedUser, setSelectedUser] = useState<{id: string, name: string, photo: string} | null>(null);
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [messages, setMessages] = useState<DirectMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
-  const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string>('');
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
+  const [imageToPreview, setImageToPreview] = useState<string | null>(null);
+  const [pendingImageFile, setPendingImageFile] = useState<File | null>(null);
+  const [pendingImagePreview, setPendingImagePreview] = useState<string>('');
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const [pendingLocation, setPendingLocation] = useState<SharedLocation | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const textInputRef = useRef<HTMLInputElement>(null);
   const currentUser = auth.currentUser;
+  const [isNearBottom, setIsNearBottom] = useState(true);
+  const listRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     // Check if we came from search with a specific user
@@ -63,213 +67,279 @@ const Messages: React.FC = () => {
     }
   }, [location.state]);
 
-  // Load conversations
+  const activeConversationId = useMemo(() => {
+    if (!currentUser || !selectedUser) return null;
+    return getConversationId(currentUser.uid, selectedUser.id);
+  }, [currentUser?.uid, selectedUser?.id]);
+
+  // Load conversations (real-time) from conversations collection
   useEffect(() => {
-    if (!currentUser || !db) {
+    if (!currentUser) {
       setConversations([]);
       return;
     }
 
-    const q = query(
-      collection(db, 'messages'),
-      or(
-        where('senderId', '==', currentUser.uid),
-        where('receiverId', '==', currentUser.uid)
-      ),
-      limit(100) // Increased limit since we filter client-side
-    );
+    const unsub = listenToConversations(currentUser.uid, async (convs: ConversationSummary[]) => {
+      const mapped = (await Promise.all(
+        convs.map(async (c) => {
+          const otherUserId = c.participants.find((p) => p !== currentUser.uid) || '';
+          if (!otherUserId) return null;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const convMap = new Map<string, Conversation>();
-      
-      // Sort docs client-side since we removed orderBy
-      const docs = snapshot.docs.sort((a, b) => {
-        const timeA = a.data().createdAt?.toMillis?.() || 0;
-        const timeB = b.data().createdAt?.toMillis?.() || 0;
-        return timeB - timeA; // Descending
-      });
-
-      // First pass: Build conversation map with message data
-      docs.forEach((doc) => {
-        const msg = doc.data();
-        const otherUserId = msg.senderId === currentUser.uid ? msg.receiverId : msg.senderId;
-        
-        if (!convMap.has(otherUserId)) {
-          // Determine the correct name and photo from message data
           let userName = 'Unknown User';
           let userPhoto = `https://ui-avatars.com/api/?name=User`;
-          
-          if (msg.senderId === currentUser.uid) {
-            // Current user sent this message, so use receiver's info
-            userName = msg.receiverName || 'Unknown User';
-            userPhoto = msg.receiverPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}`;
-          } else {
-            // Someone else sent this message, so use sender's info
-            userName = msg.senderName || 'Unknown User';
-            userPhoto = msg.senderPhoto || `https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}`;
+          try {
+            const profile = await getUserProfile(otherUserId);
+            if (profile) {
+              userName = profile.displayName || userName;
+              userPhoto = profile.photoURL || userPhoto;
+            }
+          } catch {
+            // ignore profile fetch errors
           }
-          
-          convMap.set(otherUserId, {
+
+          return {
             userId: otherUserId,
             userName,
             userPhoto,
-            lastMessage: msg.text || '📷 Image',
-            lastMessageTime: msg.createdAt,
-            unread: msg.receiverId === currentUser.uid && !msg.read ? 1 : 0
-          });
-        } else {
-          // Update unread count if needed
-          const existingConv = convMap.get(otherUserId);
-          if (existingConv && msg.receiverId === currentUser.uid && !msg.read) {
-            existingConv.unread += 1;
-          }
-        }
-      });
+            lastMessage: c.lastMessageText || '',
+            lastMessageTime: c.lastMessageAt,
+            unread: c.unreadCounts?.[currentUser.uid] || 0,
+          } as Conversation;
+        })
+      )) as Array<Conversation | null>;
 
-      // Set conversations immediately with message data
-      setConversations(Array.from(convMap.values()));
-
-      // Second pass: Fetch user profiles asynchronously and update
-      const userIds = Array.from(convMap.keys());
-      userIds.forEach(async (userId) => {
-        try {
-          const userProfile = await getUserProfile(userId);
-          if (userProfile) {
-            setConversations(prev => prev.map(conv => 
-              conv.userId === userId 
-                ? { ...conv, userName: userProfile.displayName || conv.userName, userPhoto: userProfile.photoURL || conv.userPhoto }
-                : conv
-            ));
-          }
-        } catch (error) {
-          console.error('Error fetching user profile:', error);
-        }
-      });
+      setConversations(mapped.filter(Boolean) as Conversation[]);
     });
 
-    return () => unsubscribe();
-  }, [currentUser]);
+    return () => unsub();
+  }, [currentUser?.uid]);
 
-        // Load messages for selected user
-        useEffect(() => {
-          if (!selectedUser || !currentUser || !db) {
-            setMessages([]);
-            return;
-          }
+  // Listen to direct messages for the selected conversation
+  useEffect(() => {
+    if (!currentUser || !selectedUser || !activeConversationId) {
+      setMessages([]);
+      return;
+    }
 
-    const q = query(
-      collection(db, 'messages'),
-      or(
-        where('senderId', '==', currentUser.uid),
-        where('receiverId', '==', currentUser.uid)
-      )
-    );
+    let cancelled = false;
+    ensureConversation(activeConversationId, [currentUser.uid, selectedUser.id]).catch(() => {});
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const msgs: Message[] = [];
-      snapshot.forEach((doc) => {
-        const msg = doc.data();
-        if (
-          (msg.senderId === currentUser.uid && msg.receiverId === selectedUser.id) ||
-          (msg.senderId === selectedUser.id && msg.receiverId === currentUser.uid)
-        ) {
-          msgs.push({ id: doc.id, ...msg } as Message);
-          
-          // Mark as read if it's for current user
-          if (msg.receiverId === currentUser.uid && !msg.read) {
-            updateDoc(doc.ref, { read: true });
-          }
-        }
-      });
-
-      // Sort messages by time (ascending)
-      msgs.sort((a, b) => {
-        const timeA = a.createdAt?.toMillis?.() || 0;
-        const timeB = b.createdAt?.toMillis?.() || 0;
-        return timeA - timeB;
-      });
-
+    const unsub = listenToDirectMessages(activeConversationId, (msgs) => {
+      if (cancelled) return;
       setMessages(msgs);
-      scrollToBottom();
     });
 
-    return () => unsubscribe();
-  }, [selectedUser, currentUser]);
+    return () => {
+      cancelled = true;
+      unsub();
+    };
+  }, [currentUser?.uid, selectedUser?.id, activeConversationId]);
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  // Mark messages as read (best-effort)
+  useEffect(() => {
+    if (!currentUser || !activeConversationId || messages.length === 0) return;
+    if (!db) return;
+
+    const unread = messages.filter((m) => m.receiverId === currentUser.uid && !m.read);
+    unread.slice(-25).forEach((m) => {
+      updateDoc(doc(db, 'conversations', activeConversationId, 'messages', m.id), { read: true, readAt: new Date() }).catch(() => {});
+    });
+    // Also reset conversation unread badge
+    markConversationRead(activeConversationId, currentUser.uid).catch(() => {});
+  }, [messages, currentUser?.uid, activeConversationId]);
+
+  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
+    messagesEndRef.current?.scrollIntoView({ behavior });
+  };
+
+  // Auto-scroll only if user is near bottom (WhatsApp behavior)
+  useEffect(() => {
+    if (!selectedUser) return;
+    if (isNearBottom) {
+      requestAnimationFrame(() => scrollToBottom('auto'));
+    }
+  }, [messages.length, selectedUser?.id, isNearBottom]);
+
+  const handleScroll = () => {
+    const el = listRef.current;
+    if (!el) return;
+    const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight;
+    setIsNearBottom(distanceFromBottom < 120);
   };
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim() || !selectedUser || !currentUser) return;
-
-    const messageData = {
-      text: newMessage,
-      senderId: currentUser.uid,
-      senderName: currentUser.displayName || 'Anonymous',
-      senderPhoto: currentUser.photoURL || '',
-      receiverId: selectedUser.id,
-      receiverName: selectedUser.name,
-      createdAt: db ? serverTimestamp() : new Date(),
-      read: false
-    };
-
+    if (!selectedUser || !currentUser || !activeConversationId) return;
+    if (!newMessage.trim() && !pendingImageFile && !pendingFile && !pendingLocation) return;
     try {
-      if (db) {
-        await addDoc(collection(db, 'messages'), messageData);
-      } else {
-        console.error('Database not available');
-        alert('Cannot send message. Please check your connection.');
+      setUploadError('');
+      await ensureConversation(activeConversationId, [currentUser.uid, selectedUser.id]);
+      setUploading(true);
+      setUploadProgress(0);
+
+      // 1) Location
+      if (pendingLocation) {
+        await sendDirectMessage({
+          conversationId: activeConversationId,
+          senderId: currentUser.uid,
+          receiverId: selectedUser.id,
+          text: '',
+          messageType: 'location',
+          location: pendingLocation,
+          senderName: currentUser.displayName || 'Anonymous',
+          senderPhoto: currentUser.photoURL || '',
+          receiverName: selectedUser.name,
+          receiverPhoto: selectedUser.photo,
+        });
+        setPendingLocation(null);
       }
-      setNewMessage('');
-      scrollToBottom();
+
+      // 2) Image (upload to Firebase Storage)
+      if (pendingImageFile) {
+        setUploadProgress(10);
+        const url = await uploadChatImageToCloudinary(
+          pendingImageFile,
+          `uniconnect/chat/direct/${activeConversationId}/${currentUser.uid}`
+        );
+        setUploadProgress(90);
+        await sendDirectMessage({
+          conversationId: activeConversationId,
+          senderId: currentUser.uid,
+          receiverId: selectedUser.id,
+          text: '',
+          messageType: 'image',
+          imageUrl: url,
+          senderName: currentUser.displayName || 'Anonymous',
+          senderPhoto: currentUser.photoURL || '',
+          receiverName: selectedUser.name,
+          receiverPhoto: selectedUser.photo,
+        });
+        setUploadProgress(100);
+        setPendingImageFile(null);
+        setPendingImagePreview('');
+      }
+
+      // 3) File (upload to Cloudinary raw)
+      if (pendingFile) {
+        setUploadProgress(10);
+        const uploaded = await uploadFileToCloudinary(
+          pendingFile,
+          `uniconnect/chat/direct/${activeConversationId}/${currentUser.uid}/files`
+        );
+        setUploadProgress(90);
+        await sendDirectMessage({
+          conversationId: activeConversationId,
+          senderId: currentUser.uid,
+          receiverId: selectedUser.id,
+          text: '',
+          messageType: 'file',
+          file: uploaded,
+          senderName: currentUser.displayName || 'Anonymous',
+          senderPhoto: currentUser.photoURL || '',
+          receiverName: selectedUser.name,
+          receiverPhoto: selectedUser.photo,
+        });
+        setUploadProgress(100);
+        setPendingFile(null);
+      }
+
+      // 4) Text
+      if (newMessage.trim()) {
+        await sendDirectMessage({
+          conversationId: activeConversationId,
+          senderId: currentUser.uid,
+          receiverId: selectedUser.id,
+          text: newMessage.trim(),
+          messageType: 'text',
+          senderName: currentUser.displayName || 'Anonymous',
+          senderPhoto: currentUser.photoURL || '',
+          receiverName: selectedUser.name,
+          receiverPhoto: selectedUser.photo,
+        });
+        setNewMessage('');
+      } else {
+        setNewMessage('');
+      }
+
+      setIsNearBottom(true);
+      scrollToBottom('auto');
     } catch (error) {
       console.error('Error sending message:', error);
-      alert('Failed to send message');
+      setUploadError((error as any)?.message || 'Failed to send message');
+      alert((error as any)?.message || 'Failed to send message');
+    } finally {
+      setUploading(false);
+      setUploadProgress(0);
     }
   };
 
-  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handlePickImage = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !selectedUser || !currentUser) return;
+    if (!file) return;
+    setUploadError('');
+    setPendingFile(null);
+    setPendingLocation(null);
+    setPendingImageFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPendingImagePreview(reader.result as string);
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
 
-    setUploading(true);
-    try {
-      const imageUrl = await uploadImageToCloudinary(file, `uniconnect/messages/${currentUser.uid}`);
-      
-      const messageData = {
-        text: '',
-        imageUrl,
-        senderId: currentUser.uid,
-        senderName: currentUser.displayName || 'Anonymous',
-        senderPhoto: currentUser.photoURL || '',
-        receiverId: selectedUser.id,
-        receiverName: selectedUser.name,
-        createdAt: db ? serverTimestamp() : new Date(),
-        read: false
-      };
+  const handlePickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadError('');
+    setPendingImageFile(null);
+    setPendingImagePreview('');
+    setPendingLocation(null);
+    setPendingFile(file);
+    e.target.value = '';
+  };
 
-      if (db) {
-        await addDoc(collection(db, 'messages'), messageData);
-      } else {
-        setMessages([...messages, {
-          id: Date.now().toString(),
-          ...messageData,
-          createdAt: new Date()
-        } as Message]);
-      }
-      scrollToBottom();
-    } catch (error) {
-      console.error('Error uploading image:', error);
-      alert('Failed to upload image');
-    } finally {
-      setUploading(false);
+  const handleShareLocation = async () => {
+    setUploadError('');
+    if (!navigator.geolocation) {
+      alert('Geolocation is not supported by your browser.');
+      return;
     }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setPendingImageFile(null);
+        setPendingImagePreview('');
+        setPendingFile(null);
+        setPendingLocation({
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          name: 'Current location',
+        });
+      },
+      () => {
+        alert('Could not get location. Please allow location permission and try again.');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const insertEmojiAtCursor = (emoji: string) => {
+    const input = textInputRef.current;
+    if (!input) {
+      setNewMessage((prev) => prev + emoji);
+      return;
+    }
+    const start = input.selectionStart ?? newMessage.length;
+    const end = input.selectionEnd ?? newMessage.length;
+    const next = newMessage.slice(0, start) + emoji + newMessage.slice(end);
+    setNewMessage(next);
+    requestAnimationFrame(() => {
+      input.focus();
+      const caret = start + emoji.length;
+      input.setSelectionRange(caret, caret);
+    });
   };
 
   if (!selectedUser) {
     return (
-      <div className="flex h-screen bg-slate-50 overflow-hidden pb-20 md:pb-0 w-full max-w-full">
+      <div className="flex h-screen bg-slate-50 overflow-hidden pb-4 md:pb-4 lg:pb-0 w-full max-w-full">
         {/* Conversations List */}
         <div className="w-full md:w-96 bg-white border-r border-slate-200 flex flex-col h-full max-w-full overflow-hidden">
           <div className="p-3 sm:p-4 border-b border-slate-200 flex-shrink-0">
@@ -308,7 +378,7 @@ const Messages: React.FC = () => {
                         </span>
                       )}
                     </div>
-                    <p className="text-xs sm:text-sm text-slate-500 truncate mt-0.5">{conv.lastMessage}</p>
+                    <p className="text-xs sm:text-sm text-slate-500 truncate mt-0.5">{conv.lastMessage || 'Tap to chat'}</p>
                   </div>
                 </button>
               ))
@@ -329,7 +399,7 @@ const Messages: React.FC = () => {
   }
 
   return (
-    <div className="flex flex-col h-screen md:h-screen bg-white overflow-hidden pb-20 md:pb-0 w-full max-w-full">
+    <div className="flex flex-col h-screen md:h-screen bg-white overflow-hidden pb-0 w-full max-w-full">
       {/* Chat Header */}
       <div className="p-3 sm:p-4 border-b border-slate-200 flex items-center gap-2 sm:gap-3 bg-white sticky top-0 z-10 flex-shrink-0 safe-top">
         <button 
@@ -351,7 +421,12 @@ const Messages: React.FC = () => {
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-3 sm:space-y-4 bg-slate-50 min-h-0 pb-20 md:pb-4" style={{ maxHeight: 'calc(100vh - 180px)', width: '100%' }}>
+      <div
+        ref={listRef}
+        onScroll={handleScroll}
+        className="flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 space-y-2 bg-slate-50 min-h-0 pb-24 md:pb-4 w-full"
+        style={{ maxHeight: 'calc(100vh - 180px)' }}
+      >
         {messages.map((msg) => {
           const isMine = msg.senderId === currentUser?.uid;
           return (
@@ -359,27 +434,56 @@ const Messages: React.FC = () => {
               key={msg.id}
               className={`flex ${isMine ? 'justify-end' : 'justify-start'} w-full max-w-full`}
             >
-              <div className={`max-w-[85%] sm:max-w-[70%] min-w-0 message-container ${isMine ? 'order-2' : 'order-1'}`} style={{ maxWidth: '85%' }}>
-                {msg.imageUrl && (
-                  <img 
-                    src={msg.imageUrl}
-                    alt="Shared"
-                    className="rounded-lg mb-1 max-h-48 sm:max-h-64 w-full h-auto object-contain"
-                    style={{ maxWidth: '100%' }}
-                  />
+              <div className={`max-w-[88%] sm:max-w-[70%] min-w-0 message-container ${isMine ? 'order-2' : 'order-1'}`}>
+                {/* WhatsApp-like: render by message type */}
+                {msg.messageType === 'image' && msg.imageUrl && (
+                  <button
+                    onClick={() => setImageToPreview(msg.imageUrl || null)}
+                    className="block"
+                    aria-label="Open image"
+                  >
+                    <img
+                      src={msg.imageUrl}
+                      alt="Shared"
+                      className="rounded-2xl mb-1 max-h-64 sm:max-h-80 w-full h-auto object-cover border border-slate-200"
+                      style={{ maxWidth: '100%' }}
+                    />
+                  </button>
                 )}
-                {msg.text && (
-                  <div className={`px-3 py-2 sm:px-4 sm:py-2 rounded-2xl text-sm sm:text-base ${
-                    isMine 
-                      ? 'bg-primary text-white' 
-                      : 'bg-white text-slate-900 border border-slate-200'
-                  }`} style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}>
-                    <p style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>{msg.text}</p>
+
+                {msg.messageType === 'file' && (msg as any).file?.url && (
+                  <FileAttachmentCard file={(msg as any).file} />
+                )}
+
+                {msg.messageType === 'location' && (msg as any).location?.latitude && (
+                  <LocationCard location={(msg as any).location} />
+                )}
+
+                {(msg.messageType === 'text' || !msg.messageType) && msg.text && (
+                  <div
+                    className={`px-3 py-2 sm:px-4 sm:py-2 rounded-2xl text-sm sm:text-base shadow-sm ${
+                      isMine
+                        ? 'bg-primary text-white rounded-br-md'
+                        : 'bg-white text-slate-900 border border-slate-200 rounded-bl-md'
+                    }`}
+                    style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', maxWidth: '100%' }}
+                  >
+                    <p style={{ wordBreak: 'break-word', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap' }}>
+                      {msg.text}
+                    </p>
                   </div>
                 )}
-                <p className="text-xs text-slate-400 mt-1 px-2 break-words">
-                  {msg.createdAt?.toDate?.().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'Just now'}
-                </p>
+
+                <div className="flex items-center justify-end gap-1 mt-1 px-2">
+                  <p className="text-xs text-slate-400 break-words">
+                    {msg.createdAt?.toDate?.().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'Just now'}
+                  </p>
+                  {isMine && (
+                    <span className={`text-xs ${msg.read ? 'text-sky-500' : 'text-slate-400'}`} aria-label={msg.read ? 'Read' : 'Sent'}>
+                      {msg.read ? '✓✓' : '✓'}
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -387,45 +491,133 @@ const Messages: React.FC = () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Input - Sticky at bottom with safe area padding, above mobile nav */}
-      <div className="p-3 sm:p-4 border-t border-slate-200 bg-white fixed md:sticky bottom-20 md:bottom-0 left-0 right-0 z-10 flex-shrink-0 pb-safe md:pb-0 max-w-full shadow-lg md:shadow-none">
-        <div className="flex items-center gap-2 sm:gap-3 w-full">
-          <input
-            type="file"
-            ref={fileInputRef}
-            onChange={handleImageUpload}
-            accept="image/*"
-            className="hidden"
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="p-2 sm:p-2.5 text-slate-600 hover:bg-slate-100 rounded-full flex-shrink-0 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
-            aria-label="Upload image"
-          >
-            <ImageIcon size={20} className="sm:w-5 sm:h-5" />
-          </button>
-          <input
-            type="text"
-            value={newMessage}
-            onChange={(e) => setNewMessage(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
-            placeholder="Type a message..."
-            className="flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm sm:text-base touch-manipulation"
-          />
-          <button
-            onClick={handleSendMessage}
-            disabled={!newMessage.trim() || uploading}
-            className="p-2.5 sm:p-3 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 touch-manipulation transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
-            aria-label="Send message"
-          >
-            <Send size={20} className="sm:w-5 sm:h-5" />
-          </button>
-        </div>
-        {uploading && (
-          <p className="text-xs text-slate-500 mt-2 text-center">Uploading image...</p>
+      {/* WhatsApp-style Composer */}
+      <div className="bg-white border-t border-slate-200 fixed md:sticky bottom-0 md:bottom-4 lg:bottom-0 left-0 right-0 z-10 flex-shrink-0 pb-safe md:pb-0 max-w-full shadow-lg md:shadow-none">
+        {/* Pending previews */}
+        {(pendingImagePreview || pendingFile || pendingLocation) && (
+          <div className="px-3 sm:px-4 pt-3">
+            {pendingImagePreview && (
+              <div className="relative inline-block">
+                <img src={pendingImagePreview} alt="Preview" className="h-24 w-24 object-cover rounded-xl border border-slate-200" />
+                <button
+                  onClick={() => { setPendingImageFile(null); setPendingImagePreview(''); }}
+                  className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full touch-manipulation min-w-[28px] min-h-[28px] flex items-center justify-center"
+                  aria-label="Remove image"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            {pendingFile && (
+              <div className="mt-2">
+                <FileAttachmentCard file={{ url: '#', name: pendingFile.name, size: pendingFile.size, mimeType: pendingFile.type }} />
+                <button
+                  onClick={() => setPendingFile(null)}
+                  className="mt-2 text-xs text-red-600 hover:underline"
+                >
+                  Remove file
+                </button>
+              </div>
+            )}
+            {pendingLocation && (
+              <div className="mt-2">
+                <LocationCard location={pendingLocation} />
+                <button
+                  onClick={() => setPendingLocation(null)}
+                  className="mt-2 text-xs text-red-600 hover:underline"
+                >
+                  Remove location
+                </button>
+              </div>
+            )}
+          </div>
         )}
+
+        <div className="p-3 sm:p-4">
+          {/* hidden inputs */}
+          <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePickImage} />
+          <input ref={fileInputRef} type="file" className="hidden" onChange={handlePickFile} />
+
+          <div className="flex items-center gap-2 sm:gap-3 w-full">
+            <button
+              onClick={() => setShowEmojiPicker(true)}
+              className="p-2 text-slate-600 hover:bg-slate-100 rounded-full touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Emoji"
+            >
+              <Smile size={20} />
+            </button>
+            <button
+              onClick={() => imageInputRef.current?.click()}
+              disabled={uploading}
+              className="p-2 text-slate-600 hover:bg-slate-100 rounded-full touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Photo"
+            >
+              <ImageIcon size={20} />
+            </button>
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              className="p-2 text-slate-600 hover:bg-slate-100 rounded-full touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Attach file"
+            >
+              <Paperclip size={20} />
+            </button>
+            <button
+              onClick={handleShareLocation}
+              disabled={uploading}
+              className="p-2 text-slate-600 hover:bg-slate-100 rounded-full touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Share location"
+            >
+              <MapPin size={20} />
+            </button>
+
+            <input
+              ref={textInputRef}
+              type="text"
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+              placeholder="Message"
+              className="flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 bg-slate-50 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm sm:text-base touch-manipulation"
+            />
+
+            <button
+              onClick={handleSendMessage}
+              disabled={uploading || (!newMessage.trim() && !pendingImageFile && !pendingFile && !pendingLocation)}
+              className="p-2.5 sm:p-3 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 touch-manipulation transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+              aria-label="Send"
+            >
+              <Send size={20} />
+            </button>
+          </div>
+
+          {uploading && (
+            <div className="mt-2">
+              <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                <div className="h-full bg-primary transition-all" style={{ width: `${uploadProgress}%` }} />
+              </div>
+              <p className="text-xs text-slate-500 mt-1 text-center">Uploading… {uploadProgress}%</p>
+            </div>
+          )}
+          {uploadError && (
+            <p className="text-xs text-red-600 mt-2 text-center">{uploadError}</p>
+          )}
+        </div>
       </div>
+
+      <EmojiPicker
+        isOpen={showEmojiPicker}
+        onClose={() => setShowEmojiPicker(false)}
+        onSelect={(e) => {
+          insertEmojiAtCursor(e);
+          setShowEmojiPicker(false);
+        }}
+      />
+      <ImageLightbox
+        isOpen={!!imageToPreview}
+        src={imageToPreview}
+        onClose={() => setImageToPreview(null)}
+      />
     </div>
   );
 };

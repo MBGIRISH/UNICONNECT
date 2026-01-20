@@ -61,9 +61,9 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
   const isChat = location.pathname === '/groups' || location.pathname === '/messages';
 
   return (
-    <div className="flex min-h-screen bg-slate-50 w-full max-w-full overflow-x-hidden">
+    <div className="flex flex-col min-h-screen bg-slate-50 w-full max-w-full overflow-x-hidden">
       <Navigation />
-      <main className={`flex-1 md:ml-64 w-full max-w-full overflow-x-hidden ${isChat ? 'h-screen overflow-hidden' : ''}`}>
+      <main className={`flex-1 w-full max-w-full overflow-x-hidden ${isChat ? 'h-screen overflow-hidden' : ''} lg:pt-16`}>
         <div className="w-full max-w-full overflow-x-hidden">
           {children}
         </div>

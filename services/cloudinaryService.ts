@@ -12,6 +12,50 @@ interface CloudinaryResponse {
 const CLOUDINARY_CLOUD_NAME = import.meta.env.VITE_CLOUDINARY_CLOUD_NAME || 'dlnlwudgr';
 const CLOUDINARY_API_KEY = import.meta.env.VITE_CLOUDINARY_API_KEY || '589967352537727';
 
+type CloudinaryRawResponse = {
+  secure_url: string;
+  public_id: string;
+  bytes: number;
+  resource_type: string;
+  format?: string;
+};
+
+const MAX_CHAT_IMAGE_BYTES = 10 * 1024 * 1024; // 10MB
+const MAX_CHAT_FILE_BYTES = 20 * 1024 * 1024; // 20MB
+const ALLOWED_CHAT_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+
+// Allow common doc types; browsers sometimes provide empty type - we allow if size ok.
+const ALLOWED_CHAT_FILE_TYPES = new Set([
+  'application/pdf',
+  'application/zip',
+  'application/x-zip-compressed',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document', // docx
+  'application/msword', // doc
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation', // pptx
+  'application/vnd.ms-powerpoint', // ppt
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', // xlsx
+  'application/vnd.ms-excel', // xls
+  'text/plain',
+]);
+
+function assertChatImageAllowed(file: File) {
+  if (!ALLOWED_CHAT_IMAGE_TYPES.has(file.type)) {
+    throw new Error('Unsupported image type. Please upload JPG, PNG, or WEBP.');
+  }
+  if (file.size > MAX_CHAT_IMAGE_BYTES) {
+    throw new Error('Image is too large. Max size is 10MB.');
+  }
+}
+
+function assertChatFileAllowed(file: File) {
+  if (file.size > MAX_CHAT_FILE_BYTES) {
+    throw new Error('File is too large. Max size is 20MB.');
+  }
+  if (file.type && !ALLOWED_CHAT_FILE_TYPES.has(file.type)) {
+    throw new Error('Unsupported file type. Please upload PDF, DOCX, PPTX, ZIP, TXT, or similar.');
+  }
+}
+
 /**
  * Upload a single image to Cloudinary
  * Uses unsigned upload (no API secret needed)
@@ -46,6 +90,60 @@ export const uploadImageToCloudinary = async (
     console.error('Error uploading to Cloudinary:', error);
     throw new Error(error.message || 'Image upload failed. Please try again.');
   }
+};
+
+/**
+ * Upload a file (PDF/DOCX/PPT/ZIP/etc.) to Cloudinary as "raw"
+ * NOTE: Your Cloudinary unsigned preset must allow raw uploads.
+ */
+export const uploadFileToCloudinary = async (
+  file: File,
+  folder: string = 'uniconnect'
+): Promise<{ url: string; name: string; size: number; mimeType: string }> => {
+  assertChatFileAllowed(file);
+  try {
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('upload_preset', 'uniconnect_uploads');
+    formData.append('folder', folder);
+    formData.append('resource_type', 'raw');
+
+    const response = await fetch(
+      `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/raw/upload`,
+      {
+        method: 'POST',
+        body: formData,
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      console.error('Cloudinary raw upload error:', errorData);
+      throw new Error(errorData.error?.message || 'Upload failed');
+    }
+
+    const data: CloudinaryRawResponse = await response.json();
+    return {
+      url: data.secure_url,
+      name: file.name,
+      size: file.size,
+      mimeType: file.type || 'application/octet-stream',
+    };
+  } catch (error: any) {
+    console.error('Error uploading file to Cloudinary:', error);
+    throw new Error(error.message || 'File upload failed. Please try again.');
+  }
+};
+
+/**
+ * Chat-specific image upload (validates type/size)
+ */
+export const uploadChatImageToCloudinary = async (
+  file: File,
+  folder: string
+): Promise<string> => {
+  assertChatImageAllowed(file);
+  return uploadImageToCloudinary(file, folder);
 };
 
 /**

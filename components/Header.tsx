@@ -37,18 +37,26 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
     };
   }, []);
 
-  // Listen for unread messages
+  // Listen for unread direct messages (new model: conversations/{id}/messages with unreadCounts on conversation)
   useEffect(() => {
     if (!currentUser || !db) return;
 
     const q = query(
-      collection(db, 'messages'),
-      where('receiverId', '==', currentUser.uid),
-      where('read', '==', false)
+      collection(db, 'conversations'),
+      where('participants', 'array-contains', currentUser.uid),
+      orderBy('updatedAt', 'desc'),
+      limit(200)
     );
 
     const unsubscribe = onSnapshot(q, (snapshot) => {
-      setMessageUnreadCount(snapshot.size);
+      let totalUnread = 0;
+      snapshot.docs.forEach((d) => {
+        const data: any = d.data();
+        const counts = data?.unreadCounts || {};
+        const mine = counts?.[currentUser.uid] || 0;
+        totalUnread += mine;
+      });
+      setMessageUnreadCount(totalUnread);
     });
 
     return () => unsubscribe();
