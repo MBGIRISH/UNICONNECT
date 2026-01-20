@@ -1127,13 +1127,13 @@ const Feed: React.FC = () => {
                 {showCommentsFor === post.id && (
                   <div className="border-t border-slate-100 p-4 bg-slate-50">
                     {/* Add Comment Input */}
-                    <div className="flex gap-2 mb-4">
+                    <div className="flex gap-2 mb-4 w-full max-w-full">
                       <img 
                         src={user?.photoURL || "https://ui-avatars.com/api/?name=User"} 
                         alt="You" 
-                        className="w-8 h-8 rounded-full object-cover"
+                        className="w-8 h-8 rounded-full object-cover flex-shrink-0"
                       />
-                      <div className="flex-1 flex gap-2">
+                      <div className="flex-1 flex gap-2 min-w-0">
                         <input
                           type="text"
                           placeholder="Write a comment..."
@@ -1144,12 +1144,12 @@ const Feed: React.FC = () => {
                               handleAddComment(post.id);
                             }
                           }}
-                          className="flex-1 px-3 py-2 bg-white rounded-full border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                          className="flex-1 min-w-0 px-3 py-2 bg-white rounded-full border border-slate-200 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
                         />
                         <button
                           onClick={() => handleAddComment(post.id)}
                           disabled={!newComment.trim()}
-                          className="px-4 py-2 bg-primary text-white rounded-full text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                          className="px-4 py-2 bg-primary text-white rounded-full text-sm font-medium hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex-shrink-0 whitespace-nowrap min-h-[44px]"
                         >
                           Post
                         </button>
