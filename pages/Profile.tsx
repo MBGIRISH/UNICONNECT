@@ -393,9 +393,10 @@ const Profile: React.FC = () => {
             )}
           </div>
           
-          <div className="px-6 pb-6">
-            <div className="flex flex-col md:flex-row items-start md:items-end gap-4 -mt-12 mb-6 px-4 md:px-0">
-              <div className="relative flex-shrink-0">
+          <div className="px-6 pb-6 pt-4 md:pt-6">
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-4 mb-6 px-4 md:px-0">
+              {/* Only the avatar should overlap the banner (keeps name fully readable on desktop) */}
+              <div className="relative flex-shrink-0 -mt-12 md:-mt-16">
                 <img 
                   src={avatarPreview || profile.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(profile.displayName)}&background=4f46e5&color=fff`}
                   alt="Profile" 
@@ -423,7 +424,7 @@ const Profile: React.FC = () => {
                     className="w-full text-xl md:text-2xl font-bold text-slate-900 border-b-2 border-indigo-500 focus:outline-none"
                   />
                 ) : (
-                  <h1 className="text-xl md:text-2xl font-bold text-slate-900 break-words pr-2">{profile.displayName}</h1>
+                  <h1 className="text-2xl md:text-3xl font-extrabold text-slate-900 break-words pr-2 leading-tight">{profile.displayName}</h1>
                 )}
                 <p className="text-slate-500 text-sm break-words pr-2">{profile.email}</p>
                 {!isEditing && profile.college && (

@@ -299,8 +299,8 @@ const StudyGroups: React.FC = () => {
                 setTimeout(() => {
                   const nearBottom = (window as any).__groupsNearBottom ?? true;
                   if (nearBottom && messagesEndRef.current) {
-                    messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
-                  }
+                        messagesEndRef.current.scrollIntoView({ behavior: 'auto' });
+                    }
                 }, 0);
             }, 
             (error) => {
@@ -1243,11 +1243,11 @@ const StudyGroups: React.FC = () => {
   return (
     <div className="h-screen flex flex-col bg-white relative z-0 w-full max-w-full overflow-hidden">
       {/* Chat Header */}
-      <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-200 flex justify-between items-center bg-white shadow-sm z-10 w-full max-w-full safe-top">
+      <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-slate-200 flex justify-between items-center bg-white shadow-sm z-[60] w-full max-w-full safe-top">
         <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <button 
             onClick={() => setSelectedGroup(null)} 
-            className="p-1.5 sm:p-2 -ml-1 text-slate-500 hover:bg-slate-100 rounded-full touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center flex-shrink-0" 
+            className="p-1.5 sm:p-2 ml-10 md:ml-0 text-slate-500 hover:bg-slate-100 rounded-full touch-manipulation min-w-[40px] min-h-[40px] flex items-center justify-center flex-shrink-0" 
             aria-label="Back"
           >
             <ArrowLeft size={18} className="sm:w-5 sm:h-5" />
@@ -1340,11 +1340,11 @@ const StudyGroups: React.FC = () => {
                 
                 {msg.imageUrl && (
                   <button onClick={() => setImageToPreview(msg.imageUrl || null)} className="block mb-2" aria-label="Open image">
-                    <img 
-                      src={msg.imageUrl} 
-                      alt="Shared" 
+                  <img 
+                    src={msg.imageUrl} 
+                    alt="Shared" 
                       className="rounded-2xl max-w-full cursor-pointer hover:opacity-90 transition-opacity border border-slate-200"
-                    />
+                  />
                   </button>
                 )}
                 {(msg as any).attachments && (msg as any).attachments.length > 0 && (
@@ -1599,7 +1599,7 @@ const StudyGroups: React.FC = () => {
                         // Insert emoji at cursor position (WhatsApp-like)
                         const input = messageInputRef.current;
                         if (!input) {
-                          setMessageText(prev => prev + emoji);
+                        setMessageText(prev => prev + emoji);
                         } else {
                           const start = input.selectionStart ?? messageText.length;
                           const end = input.selectionEnd ?? messageText.length;

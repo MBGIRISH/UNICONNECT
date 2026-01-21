@@ -43,8 +43,8 @@ const Navigation: React.FC = () => {
       <nav className="hidden lg:flex items-center justify-between px-4 xl:px-6 py-3 bg-white border-b border-slate-200 fixed top-0 left-0 right-0 z-50 h-16">
         <div className="flex items-center gap-8">
           <Link to="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
-              <span className="text-white font-bold text-xl">U</span>
+          <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
+            <span className="text-white font-bold text-xl">U</span>
             </div>
             <span className="text-xl font-bold text-slate-800 tracking-tight">UniConnect</span>
           </Link>
@@ -79,7 +79,7 @@ const Navigation: React.FC = () => {
       {/* Mobile/Tablet Hamburger Button */}
       <button
         onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-        className="lg:hidden fixed top-3 left-3 z-50 bg-white p-2 rounded-lg shadow-md border border-slate-200 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center safe-top"
+        className="lg:hidden fixed top-3 left-3 z-[80] bg-white p-2 rounded-lg shadow-md border border-slate-200 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center safe-top"
         aria-label="Toggle menu"
       >
         {isMobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
@@ -113,40 +113,40 @@ const Navigation: React.FC = () => {
             >
               <X size={20} />
             </button>
-          </div>
+        </div>
 
-          <div className="flex-1 px-4 space-y-2 py-4">
-            {navItems.map((item) => (
-              <Link
-                key={item.path}
-                to={item.path}
+        <div className="flex-1 px-4 space-y-2 py-4">
+          {navItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
                 onClick={() => setIsMobileMenuOpen(false)}
                 className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-200 touch-manipulation min-h-[44px] ${
-                  isActive(item.path)
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
-                }`}
-              >
-                <item.icon size={20} />
+                isActive(item.path)
+                  ? 'bg-primary/10 text-primary font-medium'
+                  : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'
+              }`}
+            >
+              <item.icon size={20} />
                 <span className="text-base">{item.label}</span>
-              </Link>
-            ))}
-          </div>
+            </Link>
+          ))}
+        </div>
 
           <div className="p-4 border-t border-slate-200">
-            <button 
+          <button 
               onClick={() => {
                 navigate('/');
                 setIsMobileMenuOpen(false);
               }}
               className="w-full bg-primary hover:bg-indigo-700 text-white py-3 rounded-xl font-medium flex items-center justify-center gap-2 shadow-lg shadow-primary/25 transition-all touch-manipulation min-h-[44px]"
-            >
-              <PlusCircle size={20} />
+          >
+            <PlusCircle size={20} />
               <span>New Post</span>
-            </button>
-          </div>
-        </nav>
-      </div>
+          </button>
+        </div>
+      </nav>
+        </div>
     </>
   );
 };

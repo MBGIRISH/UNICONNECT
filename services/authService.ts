@@ -180,11 +180,15 @@ export const sendPasswordResetCode = async (email: string): Promise<void> => {
   // Send Firebase password reset email - this is the ONLY email sent
   // When user clicks the link, they'll see a form to enter new password
   try {
+    // IMPORTANT: App uses HashRouter, so redirect URL must include "/#/" or Vercel will 404 on "/login"
+    const baseUrl = window.location.origin;
+    const loginUrl = `${baseUrl}/#/login?mode=resetPassword&email=${encodeURIComponent(trimmedEmail)}`;
     await sendPasswordResetEmail(auth, trimmedEmail, {
-      url: window.location.origin + '/login?mode=resetPassword&email=' + encodeURIComponent(trimmedEmail),
-      handleCodeInApp: false
+      url: loginUrl,
+      // Keep the Firebase action params attached to our in-app URL (works best with HashRouter)
+      handleCodeInApp: true
     });
-    console.log('Password reset email sent - user will click link to reset password');
+    console.log('Password reset email sent - user will click link to reset password:', loginUrl);
   } catch (error: any) {
     if (error.code === 'auth/user-not-found') {
       // Don't reveal email doesn't exist for security

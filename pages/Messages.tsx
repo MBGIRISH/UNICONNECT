@@ -96,7 +96,7 @@ const Messages: React.FC = () => {
           } catch {
             // ignore profile fetch errors
           }
-
+          
           return {
             userId: otherUserId,
             userName,
@@ -115,11 +115,11 @@ const Messages: React.FC = () => {
   }, [currentUser?.uid]);
 
   // Listen to direct messages for the selected conversation
-  useEffect(() => {
+        useEffect(() => {
     if (!currentUser || !selectedUser || !activeConversationId) {
-      setMessages([]);
-      return;
-    }
+            setMessages([]);
+            return;
+          }
 
     let cancelled = false;
     ensureConversation(activeConversationId, [currentUser.uid, selectedUser.id]).catch(() => {});
@@ -203,13 +203,13 @@ const Messages: React.FC = () => {
         setUploadProgress(90);
         await sendDirectMessage({
           conversationId: activeConversationId,
-          senderId: currentUser.uid,
+      senderId: currentUser.uid,
           receiverId: selectedUser.id,
           text: '',
           messageType: 'image',
           imageUrl: url,
-          senderName: currentUser.displayName || 'Anonymous',
-          senderPhoto: currentUser.photoURL || '',
+      senderName: currentUser.displayName || 'Anonymous',
+      senderPhoto: currentUser.photoURL || '',
           receiverName: selectedUser.name,
           receiverPhoto: selectedUser.photo,
         });
@@ -229,13 +229,13 @@ const Messages: React.FC = () => {
         await sendDirectMessage({
           conversationId: activeConversationId,
           senderId: currentUser.uid,
-          receiverId: selectedUser.id,
+      receiverId: selectedUser.id,
           text: '',
           messageType: 'file',
           file: uploaded,
           senderName: currentUser.displayName || 'Anonymous',
           senderPhoto: currentUser.photoURL || '',
-          receiverName: selectedUser.name,
+      receiverName: selectedUser.name,
           receiverPhoto: selectedUser.photo,
         });
         setUploadProgress(100);
@@ -284,7 +284,7 @@ const Messages: React.FC = () => {
     reader.readAsDataURL(file);
     e.target.value = '';
   };
-
+      
   const handlePickFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -401,10 +401,10 @@ const Messages: React.FC = () => {
   return (
     <div className="flex flex-col h-screen md:h-screen bg-white overflow-hidden pb-0 w-full max-w-full">
       {/* Chat Header */}
-      <div className="p-3 sm:p-4 border-b border-slate-200 flex items-center gap-2 sm:gap-3 bg-white sticky top-0 z-10 flex-shrink-0 safe-top">
+      <div className="p-3 sm:p-4 pl-16 md:pl-4 border-b border-slate-200 flex items-center gap-2 sm:gap-3 bg-white sticky top-0 z-[60] flex-shrink-0 safe-top">
         <button 
           onClick={() => setSelectedUser(null)}
-          className="md:hidden flex-shrink-0 p-2 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
+          className="flex-shrink-0 p-2 touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
           aria-label="Back"
         >
           <ArrowLeft size={20} className="sm:w-6 sm:h-6 text-slate-600" />
@@ -442,12 +442,12 @@ const Messages: React.FC = () => {
                     className="block"
                     aria-label="Open image"
                   >
-                    <img
-                      src={msg.imageUrl}
-                      alt="Shared"
+                  <img 
+                    src={msg.imageUrl}
+                    alt="Shared"
                       className="rounded-2xl mb-1 max-h-64 sm:max-h-80 w-full h-auto object-cover border border-slate-200"
-                      style={{ maxWidth: '100%' }}
-                    />
+                    style={{ maxWidth: '100%' }}
+                  />
                   </button>
                 )}
 
@@ -462,7 +462,7 @@ const Messages: React.FC = () => {
                 {(msg.messageType === 'text' || !msg.messageType) && msg.text && (
                   <div
                     className={`px-3 py-2 sm:px-4 sm:py-2 rounded-2xl text-sm sm:text-base shadow-sm ${
-                      isMine
+                    isMine 
                         ? 'bg-primary text-white rounded-br-md'
                         : 'bg-white text-slate-900 border border-slate-200 rounded-bl-md'
                     }`}
@@ -476,8 +476,8 @@ const Messages: React.FC = () => {
 
                 <div className="flex items-center justify-end gap-1 mt-1 px-2">
                   <p className="text-xs text-slate-400 break-words">
-                    {msg.createdAt?.toDate?.().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'Just now'}
-                  </p>
+                  {msg.createdAt?.toDate?.().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) || 'Just now'}
+                </p>
                   {isMine && (
                     <span className={`text-xs ${msg.read ? 'text-sky-500' : 'text-slate-400'}`} aria-label={msg.read ? 'Read' : 'Sent'}>
                       {msg.read ? '✓✓' : '✓'}
@@ -538,7 +538,7 @@ const Messages: React.FC = () => {
           <input ref={imageInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={handlePickImage} />
           <input ref={fileInputRef} type="file" className="hidden" onChange={handlePickFile} />
 
-          <div className="flex items-center gap-2 sm:gap-3 w-full">
+        <div className="flex items-center gap-2 sm:gap-3 w-full">
             <button
               onClick={() => setShowEmojiPicker(true)}
               className="p-2 text-slate-600 hover:bg-slate-100 rounded-full touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
@@ -554,12 +554,12 @@ const Messages: React.FC = () => {
             >
               <ImageIcon size={20} />
             </button>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
               className="p-2 text-slate-600 hover:bg-slate-100 rounded-full touch-manipulation min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Attach file"
-            >
+          >
               <Paperclip size={20} />
             </button>
             <button
@@ -569,29 +569,29 @@ const Messages: React.FC = () => {
               aria-label="Share location"
             >
               <MapPin size={20} />
-            </button>
+          </button>
 
-            <input
+          <input
               ref={textInputRef}
-              type="text"
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+            type="text"
+            value={newMessage}
+            onChange={(e) => setNewMessage(e.target.value)}
+            onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
               placeholder="Message"
               className="flex-1 min-w-0 px-3 py-2.5 sm:px-4 sm:py-3 bg-slate-50 border border-slate-200 rounded-full focus:outline-none focus:ring-2 focus:ring-primary/50 text-sm sm:text-base touch-manipulation"
-            />
+          />
 
-            <button
-              onClick={handleSendMessage}
+          <button
+            onClick={handleSendMessage}
               disabled={uploading || (!newMessage.trim() && !pendingImageFile && !pendingFile && !pendingLocation)}
-              className="p-2.5 sm:p-3 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 touch-manipulation transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
+            className="p-2.5 sm:p-3 bg-primary text-white rounded-full hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 touch-manipulation transition-colors min-w-[44px] min-h-[44px] flex items-center justify-center"
               aria-label="Send"
-            >
+          >
               <Send size={20} />
-            </button>
-          </div>
+          </button>
+        </div>
 
-          {uploading && (
+        {uploading && (
             <div className="mt-2">
               <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
                 <div className="h-full bg-primary transition-all" style={{ width: `${uploadProgress}%` }} />
@@ -601,7 +601,7 @@ const Messages: React.FC = () => {
           )}
           {uploadError && (
             <p className="text-xs text-red-600 mt-2 text-center">{uploadError}</p>
-          )}
+        )}
         </div>
       </div>
 

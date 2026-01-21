@@ -206,8 +206,8 @@ const Login: React.FC = () => {
               setConfirmPassword('');
               setSuccess('');
               setSearchParams({});
-              // Force navigation to login page - clear any cached auth state
-              window.location.href = '/login';
+              // IMPORTANT: App uses HashRouter, so use react-router navigation (avoids Vercel 404 on /login)
+              navigate('/login');
             }, 2000);
           } catch (resetError: any) {
             console.error('Password reset failed:', resetError);

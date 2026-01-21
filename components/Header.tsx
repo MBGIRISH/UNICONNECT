@@ -284,9 +284,104 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
         </div>
       </header>
 
+      {/* Desktop Actions (Messages + Notifications) */}
+      {/* Place below the main navbar (HashRouter app layout) so it doesn't get covered on desktop */}
+      <div className="hidden md:flex fixed top-20 right-4 z-50 items-center gap-2">
+        <button
+          onClick={() => navigate('/messages')}
+          className="p-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-full relative shadow-sm"
+          aria-label="Messages"
+        >
+          <MessageCircle size={18} />
+          {messageUnreadCount > 0 && (
+            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold rounded-full min-w-[18px] h-[18px] flex items-center justify-center px-1">
+              {messageUnreadCount > 9 ? '9+' : messageUnreadCount}
+            </span>
+          )}
+        </button>
+
+        <div className="relative" ref={notificationRef}>
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            className={`p-2 bg-white border border-slate-200 rounded-full relative shadow-sm ${
+              showNotifications ? 'text-primary' : 'text-slate-700 hover:bg-slate-50'
+            }`}
+            aria-label="Notifications"
+          >
+            <Bell size={18} />
+            {notificationUnreadCount > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full border border-white"></span>
+            )}
+          </button>
+
+          {/* Notifications Dropdown (Desktop uses absolute positioning) */}
+          {showNotifications && (
+            <div className="absolute right-0 top-full mt-2 w-96 max-w-[min(24rem,calc(100vw-2rem))] bg-white rounded-xl shadow-xl border border-slate-200 z-50 overflow-hidden max-h-[80vh] flex flex-col">
+              <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-white sticky top-0 z-10 flex-shrink-0">
+                <h3 className="font-semibold text-slate-800 text-base">Notifications</h3>
+                {notificationUnreadCount > 0 && (
+                  <button
+                    onClick={markAllNotificationsRead}
+                    className="text-xs text-primary hover:text-indigo-700 flex items-center gap-1 px-2 py-1 min-h-[32px]"
+                  >
+                    <Check size={12} />
+                    Mark all read
+                  </button>
+                )}
+              </div>
+
+              <div className="overflow-y-auto flex-1 min-h-0">
+                {notifications.length > 0 ? (
+                  notifications.map((notification) => (
+                    <div
+                      key={notification.id}
+                      onClick={() => handleNotificationClick(notification)}
+                      className={`p-4 border-b border-slate-50 hover:bg-slate-50 cursor-pointer flex gap-3 ${
+                        !notification.read ? 'bg-indigo-50/50' : ''
+                      }`}
+                    >
+                      <div
+                        className={`mt-1 w-2 h-2 rounded-full flex-shrink-0 ${
+                          !notification.read ? 'bg-primary' : 'bg-transparent'
+                        }`}
+                      />
+
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-slate-800 break-words">{notification.title}</p>
+                        <p className="text-sm text-slate-600 mt-0.5 break-words">{notification.message}</p>
+                        <p className="text-xs text-slate-400 mt-2">
+                          {notification.createdAt
+                            ? (notification.createdAt instanceof Date
+                                ? notification.createdAt.toLocaleDateString()
+                                : new Date((notification.createdAt as any).seconds * 1000).toLocaleDateString())
+                            : 'Just now'}
+                        </p>
+                      </div>
+
+                      <button
+                        onClick={(e) => deleteNotification(e, notification.id)}
+                        className="text-slate-400 hover:text-red-500 p-2 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
+                        aria-label="Delete notification"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))
+                ) : (
+                  <div className="p-8 text-center text-slate-500">
+                    <Bell size={32} className="mx-auto mb-2 text-slate-300" />
+                    <p className="text-sm">No notifications yet</p>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
       {/* Desktop Search Bar */}
       {showSearchBar && (
-      <div className="hidden md:block fixed top-4 left-1/2 transform -translate-x-1/2 z-40 w-full max-w-md px-4">
+      <div className="hidden md:block fixed top-20 left-1/2 transform -translate-x-1/2 z-50 w-full max-w-md px-4">
         <div className="relative">
           <input
             type="text"
