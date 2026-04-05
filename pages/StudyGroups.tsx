@@ -50,6 +50,40 @@ const StudyGroups: React.FC = () => {
   const { user } = useAuth();
   const [imageToPreview, setImageToPreview] = useState<string | null>(null);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const fallbackGifResults = [
+    {
+      id: 'fallback-1',
+      title: 'Thumbs up',
+      images: {
+        fixed_height: { url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif' },
+        fixed_height_small: { url: 'https://media.giphy.com/media/111ebonMs90YLu/100w.gif' }
+      }
+    },
+    {
+      id: 'fallback-2',
+      title: 'Celebrate',
+      images: {
+        fixed_height: { url: 'https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif' },
+        fixed_height_small: { url: 'https://media.giphy.com/media/l0HlBO7eyXzSZkJri/100w.gif' }
+      }
+    },
+    {
+      id: 'fallback-3',
+      title: 'Dance',
+      images: {
+        fixed_height: { url: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif' },
+        fixed_height_small: { url: 'https://media.giphy.com/media/ICOgUNjpvO0PC/100w.gif' }
+      }
+    },
+    {
+      id: 'fallback-4',
+      title: 'Cool',
+      images: {
+        fixed_height: { url: 'https://media.giphy.com/media/xUOxfjsw4v6Vxf9nPO/giphy.gif' },
+        fixed_height_small: { url: 'https://media.giphy.com/media/xUOxfjsw4v6Vxf9nPO/100w.gif' }
+      }
+    }
+  ];
 
   const [newGroup, setNewGroup] = useState({
     name: '',
@@ -729,24 +763,17 @@ const StudyGroups: React.FC = () => {
         url = `https://api.giphy.com/v1/gifs/trending?api_key=${apiKey}&limit=20&rating=g`;
       }
       
-      console.log('GIPHY API request:', url);
       const response = await fetch(url);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('GIPHY API success:', data.data?.length || 0, 'GIFs found');
         setGifResults(data.data || []);
       } else {
-        console.error('GIPHY API error:', response.status, response.statusText);
-        const errorData = await response.json().catch(() => ({}));
-        console.error('GIPHY error details:', errorData);
-        alert(`GIF search failed: ${errorData.message || response.statusText}. Please check your GIPHY API key.`);
-        setGifResults([]);
+        setGifResults(fallbackGifResults);
       }
     } catch (error: any) {
       console.error('Error searching GIFs:', error);
-      alert(`GIF search error: ${error.message}. Please check your internet connection.`);
-      setGifResults([]);
+      setGifResults(fallbackGifResults);
     }
   };
 
@@ -1538,7 +1565,7 @@ const StudyGroups: React.FC = () => {
             {showEmojiPicker && (
               <div
                 ref={emojiPickerRef}
-                className="fixed sm:absolute bottom-[105px] sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[60] max-h-48 overflow-y-auto"
+                className="fixed sm:absolute bottom-[105px] sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[80] max-h-48 overflow-y-auto"
                 style={{ width: 'min(280px, calc(100vw - 1rem))' }}
               >
                 <div className="grid grid-cols-5 gap-2">
@@ -1592,7 +1619,7 @@ const StudyGroups: React.FC = () => {
             {showGifPicker && (
               <div
                 ref={gifPickerRef}
-                className="fixed sm:absolute bottom-[105px] sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[60]"
+                className="fixed sm:absolute bottom-[105px] sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[80]"
                 style={{ width: 'min(320px, calc(100vw - 1rem))', maxHeight: '400px' }}
               >
                 <input

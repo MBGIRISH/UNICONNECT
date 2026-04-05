@@ -616,7 +616,7 @@ const Marketplace: React.FC = () => {
                   <p className="text-slate-600 leading-relaxed text-sm sm:text-base break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{selectedItem.description}</p>
                 </div>
 
-                {user && user.uid === selectedItem.sellerId && (
+                {user && user.uid === selectedItem.sellerId && messages.length > 0 && (
                   <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                     <div className="flex items-center justify-between gap-3 mb-3">
                       <h4 className="font-semibold text-slate-900 text-sm sm:text-base">Buyer inquiries</h4>
@@ -625,54 +625,50 @@ const Marketplace: React.FC = () => {
                       </span>
                     </div>
 
-                    {messages.length === 0 ? (
-                      <p className="text-sm text-slate-500">No inquiries yet.</p>
-                    ) : (
-                      <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
-                        {messages.map((msg) => (
-                          <div key={msg.id} className="bg-white border border-slate-200 rounded-xl p-3">
-                            <div className="flex items-center justify-between gap-2 mb-1">
-                              <p className="text-sm font-medium text-slate-900">{msg.buyerName}</p>
-                              <p className="text-[11px] text-slate-400">
-                                {msg.createdAt instanceof Date
-                                  ? msg.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                                  : new Date((msg.createdAt as any)?.seconds * 1000 || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                              </p>
-                            </div>
-                            <p className="text-sm text-slate-600 break-words">{msg.message}</p>
-                            <div className="mt-2 flex justify-end">
-                              <button
-                                type="button"
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const buyerPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.buyerName || 'User')}`;
-                                  try {
-                                    const conversationId = getConversationId(user?.uid || msg.buyerId, msg.buyerId);
-                                    if (user) {
-                                      await ensureConversation(conversationId, [user.uid, msg.buyerId]);
-                                    }
-                                  } catch (error) {
-                                    console.error('Failed to prepare conversation:', error);
-                                  }
-                                  navigate('/messages', {
-                                    state: {
-                                      userId: msg.buyerId,
-                                      userName: msg.buyerName,
-                                      userPhoto: buyerPhoto,
-                                      itemId: selectedItem.id,
-                                      itemTitle: selectedItem.title,
-                                    }
-                                  });
-                                }}
-                                className="text-xs font-medium text-primary hover:text-indigo-700"
-                              >
-                                Reply in Messages
-                              </button>
-                            </div>
+                    <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
+                      {messages.map((msg) => (
+                        <div key={msg.id} className="bg-white border border-slate-200 rounded-xl p-3">
+                          <div className="flex items-center justify-between gap-2 mb-1">
+                            <p className="text-sm font-medium text-slate-900">{msg.buyerName}</p>
+                            <p className="text-[11px] text-slate-400">
+                              {msg.createdAt instanceof Date
+                                ? msg.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                : new Date((msg.createdAt as any)?.seconds * 1000 || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            </p>
                           </div>
-                        ))}
-                      </div>
-                    )}
+                          <p className="text-sm text-slate-600 break-words">{msg.message}</p>
+                          <div className="mt-2 flex justify-end">
+                            <button
+                              type="button"
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                const buyerPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.buyerName || 'User')}`;
+                                try {
+                                  const conversationId = getConversationId(user?.uid || msg.buyerId, msg.buyerId);
+                                  if (user) {
+                                    await ensureConversation(conversationId, [user.uid, msg.buyerId]);
+                                  }
+                                } catch (error) {
+                                  console.error('Failed to prepare conversation:', error);
+                                }
+                                navigate('/messages', {
+                                  state: {
+                                    userId: msg.buyerId,
+                                    userName: msg.buyerName,
+                                    userPhoto: buyerPhoto,
+                                    itemId: selectedItem.id,
+                                    itemTitle: selectedItem.title,
+                                  }
+                                });
+                              }}
+                              className="text-xs font-medium text-primary hover:text-indigo-700"
+                            >
+                              Reply in Messages
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 )}
 
