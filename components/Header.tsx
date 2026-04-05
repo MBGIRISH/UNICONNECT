@@ -85,6 +85,9 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
   }, [currentUser]);
 
   const handleNotificationClick = async (notification: Notification) => {
+    const userId = currentUser?.uid;
+    if (!userId || !db) return;
+
     if (!notification.read && currentUser) {
       setNotifications((prev) =>
         prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
@@ -92,14 +95,26 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
       setNotificationUnreadCount((prev) => Math.max(0, prev - 1));
 
       try {
-        await updateDoc(doc(db, `users/${currentUser.uid}/notifications`, notification.id), {
+        await updateDoc(doc(db, `users/${userId}/notifications`, notification.id), {
           read: true
         });
       } catch (error) {
         console.error('Failed to mark notification as read:', error);
       }
     }
-    
+
+    if (notification.type === 'marketplace_inquiry' && notification.fromUserId) {
+      navigate('/messages', {
+        state: {
+          userId: notification.fromUserId,
+          userName: notification.fromUserName || 'User',
+          userPhoto: `https://ui-avatars.com/api/?name=${encodeURIComponent(notification.fromUserName || 'User')}`
+        }
+      });
+      setShowNotifications(false);
+      return;
+    }
+
     if (notification.link) {
       navigate(notification.link);
       setShowNotifications(false);
@@ -293,6 +308,8 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
 
                           <button
                             type="button"
+                            onPointerDown={(e) => e.stopPropagation()}
+                            onTouchStart={(e) => e.stopPropagation()}
                             onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => deleteNotification(e, notification.id)}
                             className="text-slate-400 hover:text-red-500 p-1.5 sm:p-2 touch-manipulation flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
@@ -354,6 +371,8 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
                 {notificationUnreadCount > 0 && (
                   <button
                     type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onTouchStart={(e) => e.stopPropagation()}
                     onClick={markAllNotificationsRead}
                     className="text-xs text-primary hover:text-indigo-700 flex items-center gap-1 px-2 py-1 min-h-[32px]"
                   >
@@ -393,6 +412,8 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
 
                       <button
                         type="button"
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onTouchStart={(e) => e.stopPropagation()}
                         onClick={(e) => deleteNotification(e, notification.id)}
                         className="text-slate-400 hover:text-red-500 p-2 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
                         aria-label="Delete notification"
