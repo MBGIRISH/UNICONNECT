@@ -86,9 +86,18 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
 
   const handleNotificationClick = async (notification: Notification) => {
     if (!notification.read && currentUser) {
-      await updateDoc(doc(db, `users/${currentUser.uid}/notifications`, notification.id), {
-        read: true
-      });
+      setNotifications((prev) =>
+        prev.map((n) => (n.id === notification.id ? { ...n, read: true } : n))
+      );
+      setNotificationUnreadCount((prev) => Math.max(0, prev - 1));
+
+      try {
+        await updateDoc(doc(db, `users/${currentUser.uid}/notifications`, notification.id), {
+          read: true
+        });
+      } catch (error) {
+        console.error('Failed to mark notification as read:', error);
+      }
     }
     
     if (notification.link) {
@@ -100,18 +109,38 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
   const markAllNotificationsRead = async () => {
     if (!currentUser) return;
     
-    const unreadNotifications = notifications.filter(n => !n.read);
-    const updatePromises = unreadNotifications.map(n => 
-      updateDoc(doc(db, `users/${currentUser.uid}/notifications`, n.id), { read: true })
-    );
-    
-    await Promise.all(updatePromises);
+    const unreadNotifications = notifications.filter((n) => !n.read);
+    if (unreadNotifications.length === 0) return;
+
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+    setNotificationUnreadCount(0);
+
+    try {
+      const updatePromises = unreadNotifications.map((n) =>
+        updateDoc(doc(db, `users/${currentUser.uid}/notifications`, n.id), { read: true })
+      );
+
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('Failed to mark notifications as read:', error);
+    }
   };
 
   const deleteNotification = async (e: React.MouseEvent, notificationId: string) => {
     e.stopPropagation();
     if (!currentUser) return;
-    await deleteDoc(doc(db, `users/${currentUser.uid}/notifications`, notificationId));
+
+    const currentNotification = notifications.find((n) => n.id === notificationId);
+    setNotifications((prev) => prev.filter((n) => n.id !== notificationId));
+    if (currentNotification && !currentNotification.read) {
+      setNotificationUnreadCount((prev) => Math.max(0, prev - 1));
+    }
+
+    try {
+      await deleteDoc(doc(db, `users/${currentUser.uid}/notifications`, notificationId));
+    } catch (error) {
+      console.error('Failed to delete notification:', error);
+    }
   };
 
   useEffect(() => {
@@ -225,6 +254,7 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
                     <h3 className="font-semibold text-slate-800 text-sm sm:text-base">Notifications</h3>
                     {notificationUnreadCount > 0 && (
                       <button 
+                        type="button"
                         onClick={markAllNotificationsRead}
                         className="text-xs text-primary hover:text-indigo-700 flex items-center gap-1 touch-manipulation px-2 py-1 min-h-[32px]"
                       >
@@ -262,6 +292,8 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
                           </div>
 
                           <button
+                            type="button"
+                            onMouseDown={(e) => e.stopPropagation()}
                             onClick={(e) => deleteNotification(e, notification.id)}
                             className="text-slate-400 hover:text-red-500 p-1.5 sm:p-2 touch-manipulation flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
                             aria-label="Delete notification"
@@ -321,6 +353,7 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
                 <h3 className="font-semibold text-slate-800 text-base">Notifications</h3>
                 {notificationUnreadCount > 0 && (
                   <button
+                    type="button"
                     onClick={markAllNotificationsRead}
                     className="text-xs text-primary hover:text-indigo-700 flex items-center gap-1 px-2 py-1 min-h-[32px]"
                   >
@@ -359,6 +392,7 @@ const Header: React.FC<HeaderProps> = ({ title, showSearchBar = false }) => {
                       </div>
 
                       <button
+                        type="button"
                         onClick={(e) => deleteNotification(e, notification.id)}
                         className="text-slate-400 hover:text-red-500 p-2 flex-shrink-0 min-w-[32px] min-h-[32px] flex items-center justify-center"
                         aria-label="Delete notification"

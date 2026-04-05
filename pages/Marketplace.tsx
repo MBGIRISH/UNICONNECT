@@ -1,12 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Tag, Filter, Plus, X, Loader2, Upload, MessageCircle, DollarSign, Package, ArrowLeft, Send, Image as ImageIcon } from 'lucide-react';
-import { MarketplaceListing } from '../types';
+import { MarketplaceInquiry, MarketplaceListing } from '../types';
 import Header from '../components/Header';
 import SuccessModal from '../components/SuccessModal';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
-import { collection, getDocs, addDoc, serverTimestamp, query, orderBy, onSnapshot, doc, updateDoc, getDoc, where } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
+import { collection, getDocs, addDoc, serverTimestamp, query, doc, updateDoc, getDoc, where } from 'firebase/firestore';
 import { uploadMarketplaceImages } from '../services/cloudinaryService';
+import { getInquiries, sendInquiry } from '../services/marketplaceService';
+import { notifyMarketplaceInquiry } from '../services/notificationService';
+import { ensureConversation, getConversationId, sendDirectMessage } from '../services/chatService';
 
 const Marketplace: React.FC = () => {
   const [items, setItems] = useState<MarketplaceListing[]>([]);
@@ -18,11 +22,12 @@ const Marketplace: React.FC = () => {
   const [imageFiles, setImageFiles] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
-  const [messages, setMessages] = useState<any[]>([]);
+  const [messages, setMessages] = useState<MarketplaceInquiry[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
   const { user } = useAuth();
+  const navigate = useNavigate();
   
   const [newItem, setNewItem] = useState({
     title: '',
@@ -31,6 +36,19 @@ const Marketplace: React.FC = () => {
     condition: 'Good',
     category: 'Books'
   });
+
+  const formatInquiryTime = (createdAt: MarketplaceInquiry['createdAt']) => {
+    if (createdAt instanceof Date) {
+      return createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    const seconds = (createdAt as any)?.seconds;
+    if (typeof seconds === 'number') {
+      return new Date(seconds * 1000).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    return 'Just now';
+  };
 
   const fetchItems = async () => {
     setLoading(true);
@@ -88,33 +106,33 @@ const Marketplace: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!selectedItem || !showMessageModal) return;
-
-    let unsubscribe = () => {};
-    try {
-      if (db) {
-        const q = query(
-          collection(db, "marketplace", selectedItem.id, "messages"),
-          orderBy("timestamp", "asc")
-        );
-
-        unsubscribe = onSnapshot(q, (snapshot) => {
-          const msgs = snapshot.docs.map(doc => ({
-            id: doc.id,
-            ...doc.data(),
-            timestamp: doc.data().timestamp?.toDate() || new Date()
-          }));
-          setMessages(msgs);
-        }, (error) => {
-          console.error("Messages error:", error);
-        });
-      }
-    } catch (e) {
-      console.error("Firestore init failed", e);
+    if (!selectedItem) {
+      setMessages([]);
+      return;
     }
 
-    return () => { if (unsubscribe) unsubscribe(); };
-  }, [selectedItem, showMessageModal]);
+    let cancelled = false;
+
+    const loadInquiries = async () => {
+      try {
+        const inquiries = await getInquiries(selectedItem.id);
+        if (!cancelled) {
+          setMessages(inquiries);
+        }
+      } catch (error) {
+        console.error('Error loading marketplace inquiries:', error);
+        if (!cancelled) {
+          setMessages([]);
+        }
+      }
+    };
+
+    loadInquiries();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedItem?.id]);
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
@@ -221,22 +239,65 @@ const Marketplace: React.FC = () => {
     if (!selectedItem) return;
 
     setShowDetailModal(false);
-    setShowMessageModal(true);
+    navigate('/messages', {
+      state: {
+        userId: selectedItem.sellerId,
+        userName: selectedItem.sellerName,
+        userPhoto: selectedItem.sellerAvatar,
+        itemId: selectedItem.id,
+        itemTitle: selectedItem.title,
+      }
+    });
   };
 
   const handleSendMessage = async () => {
     if (!newMessage.trim() || !selectedItem || !user || !db) return;
 
     try {
-      await addDoc(collection(db, "marketplace", selectedItem.id, "messages"), {
-        text: newMessage,
+      const conversationId = getConversationId(user.uid, selectedItem.sellerId);
+      await ensureConversation(conversationId, [user.uid, selectedItem.sellerId]);
+
+      await sendInquiry(
+        selectedItem.id,
+        user.uid,
+        user.displayName || 'User',
+        selectedItem.sellerId,
+        newMessage.trim()
+      );
+
+      await notifyMarketplaceInquiry(
+        selectedItem.sellerId,
+        user.displayName || 'User',
+        user.uid,
+        selectedItem.title,
+        selectedItem.id
+      );
+
+      await sendDirectMessage({
+        conversationId,
         senderId: user.uid,
+        receiverId: selectedItem.sellerId,
+        text: newMessage.trim(),
+        messageType: 'text',
         senderName: user.displayName || 'User',
-        senderAvatar: user.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.displayName || 'User')}`,
-        timestamp: serverTimestamp()
+        senderPhoto: user.photoURL || '',
+        receiverName: selectedItem.sellerName,
+        receiverPhoto: selectedItem.sellerAvatar || '',
       });
 
       setNewMessage('');
+      const inquiries = await getInquiries(selectedItem.id);
+      setMessages(inquiries);
+      setShowMessageModal(false);
+      navigate('/messages', {
+        state: {
+          userId: selectedItem.sellerId,
+          userName: selectedItem.sellerName,
+          userPhoto: selectedItem.sellerAvatar,
+          itemId: selectedItem.id,
+          itemTitle: selectedItem.title,
+        }
+      });
     } catch (error) {
       console.error('Error sending message:', error);
       alert('Failed to send message');
@@ -555,6 +616,66 @@ const Marketplace: React.FC = () => {
                   <p className="text-slate-600 leading-relaxed text-sm sm:text-base break-words" style={{ wordBreak: 'break-word', overflowWrap: 'anywhere' }}>{selectedItem.description}</p>
                 </div>
 
+                {user && user.uid === selectedItem.sellerId && (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between gap-3 mb-3">
+                      <h4 className="font-semibold text-slate-900 text-sm sm:text-base">Buyer inquiries</h4>
+                      <span className="text-xs text-slate-500">
+                        {messages.length} message{messages.length !== 1 ? 's' : ''}
+                      </span>
+                    </div>
+
+                    {messages.length === 0 ? (
+                      <p className="text-sm text-slate-500">No inquiries yet.</p>
+                    ) : (
+                      <div className="space-y-3 max-h-56 overflow-y-auto pr-1">
+                        {messages.map((msg) => (
+                          <div key={msg.id} className="bg-white border border-slate-200 rounded-xl p-3">
+                            <div className="flex items-center justify-between gap-2 mb-1">
+                              <p className="text-sm font-medium text-slate-900">{msg.buyerName}</p>
+                              <p className="text-[11px] text-slate-400">
+                                {msg.createdAt instanceof Date
+                                  ? msg.createdAt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                                  : new Date((msg.createdAt as any)?.seconds * 1000 || Date.now()).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                              </p>
+                            </div>
+                            <p className="text-sm text-slate-600 break-words">{msg.message}</p>
+                            <div className="mt-2 flex justify-end">
+                              <button
+                                type="button"
+                                onClick={async (e) => {
+                                  e.stopPropagation();
+                                  const buyerPhoto = `https://ui-avatars.com/api/?name=${encodeURIComponent(msg.buyerName || 'User')}`;
+                                  try {
+                                    const conversationId = getConversationId(user?.uid || msg.buyerId, msg.buyerId);
+                                    if (user) {
+                                      await ensureConversation(conversationId, [user.uid, msg.buyerId]);
+                                    }
+                                  } catch (error) {
+                                    console.error('Failed to prepare conversation:', error);
+                                  }
+                                  navigate('/messages', {
+                                    state: {
+                                      userId: msg.buyerId,
+                                      userName: msg.buyerName,
+                                      userPhoto: buyerPhoto,
+                                      itemId: selectedItem.id,
+                                      itemTitle: selectedItem.title,
+                                    }
+                                  });
+                                }}
+                                className="text-xs font-medium text-primary hover:text-indigo-700"
+                              >
+                                Reply in Messages
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex gap-3 pt-4">
                   {user && user.uid === selectedItem.sellerId ? (
                     !selectedItem.isSold && (
@@ -610,7 +731,7 @@ const Marketplace: React.FC = () => {
                 </div>
               ) : (
                 messages.map((msg) => {
-                  const isMe = msg.senderId === user?.uid;
+                  const isMe = msg.buyerId === user?.uid;
                   return (
                     <div key={msg.id} className={`flex ${isMe ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[75%] rounded-2xl p-3 text-sm ${
@@ -618,10 +739,12 @@ const Marketplace: React.FC = () => {
                           ? 'bg-primary text-white rounded-br-none' 
                           : 'bg-white border border-slate-100 text-slate-800 rounded-bl-none'
                       }`}>
-                        {!isMe && <p className="text-[10px] font-bold text-slate-400 mb-1">{msg.senderName}</p>}
-                        <p className="leading-relaxed">{msg.text}</p>
+                        {user && user.uid === selectedItem.sellerId && (
+                          <p className="text-[10px] font-bold text-slate-400 mb-1">{msg.buyerName}</p>
+                        )}
+                        <p className="leading-relaxed">{msg.message}</p>
                         <span className={`text-[10px] block text-right mt-1 ${isMe ? 'text-indigo-200' : 'text-slate-400'}`}>
-                          {msg.timestamp ? msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '...'}
+                          {formatInquiryTime(msg.createdAt)}
                         </span>
                       </div>
                     </div>
