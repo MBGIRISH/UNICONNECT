@@ -41,6 +41,10 @@ export interface Post {
   college?: string; // College field for filtering (matches user's college)
   content: string;
   imageUrls?: string[];
+  mediaItems?: {
+    type: 'image' | 'gif';
+    url: string;
+  }[];
   groupId?: string; // If posted in a group
   likesCount: number;
   commentsCount: number;

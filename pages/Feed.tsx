@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Loader2, Upload, GraduationCap, Smile, FileText, MapPin, Hash, BarChart3, X } from 'lucide-react';
+import { Heart, MessageCircle, Share2, MoreHorizontal, Image as ImageIcon, Loader2, Upload, GraduationCap, Smile, FileText, MapPin, Hash, BarChart3, X, Paperclip } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Post } from '../types';
 import Header from '../components/Header';
@@ -14,8 +14,8 @@ const Feed: React.FC = () => {
   const [posts, setPosts] = useState<Post[]>([]);
   const [newPostText, setNewPostText] = useState('');
   const [isLoading, setIsLoading] = useState(true);
-  const [imageFile, setImageFile] = useState<File | null>(null);
-  const [imagePreview, setImagePreview] = useState('');
+  const [imageFiles, setImageFiles] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [uploading, setUploading] = useState(false);
   const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
   const [pollVotes, setPollVotes] = useState<{[postId: string]: Set<number>}>({}); // Track which options user voted for
@@ -27,8 +27,9 @@ const Feed: React.FC = () => {
   // New feature states
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [showGifPicker, setShowGifPicker] = useState(false);
+  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
   const [showPollCreator, setShowPollCreator] = useState(false);
-  const [selectedGif, setSelectedGif] = useState<string | null>(null);
+  const [selectedGifs, setSelectedGifs] = useState<string[]>([]);
   const [gifSearchTerm, setGifSearchTerm] = useState('');
   const [gifResults, setGifResults] = useState<any[]>([]);
   const [pollQuestion, setPollQuestion] = useState('');
@@ -43,6 +44,44 @@ const Feed: React.FC = () => {
   
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const gifPickerRef = useRef<HTMLDivElement>(null);
+  const attachmentMenuRef = useRef<HTMLDivElement>(null);
+  const imageInputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const MAX_MEDIA_ITEMS = 10;
+  const fallbackGifResults = [
+    {
+      id: 'fallback-1',
+      title: 'Thumbs up',
+      images: {
+        fixed_height: { url: 'https://media.giphy.com/media/111ebonMs90YLu/giphy.gif' },
+        fixed_height_small: { url: 'https://media.giphy.com/media/111ebonMs90YLu/100w.gif' }
+      }
+    },
+    {
+      id: 'fallback-2',
+      title: 'Celebrate',
+      images: {
+        fixed_height: { url: 'https://media.giphy.com/media/l0HlBO7eyXzSZkJri/giphy.gif' },
+        fixed_height_small: { url: 'https://media.giphy.com/media/l0HlBO7eyXzSZkJri/100w.gif' }
+      }
+    },
+    {
+      id: 'fallback-3',
+      title: 'Dance',
+      images: {
+        fixed_height: { url: 'https://media.giphy.com/media/ICOgUNjpvO0PC/giphy.gif' },
+        fixed_height_small: { url: 'https://media.giphy.com/media/ICOgUNjpvO0PC/100w.gif' }
+      }
+    },
+    {
+      id: 'fallback-4',
+      title: 'Cool',
+      images: {
+        fixed_height: { url: 'https://media.giphy.com/media/xUOxfjsw4v6Vxf9nPO/giphy.gif' },
+        fixed_height_small: { url: 'https://media.giphy.com/media/xUOxfjsw4v6Vxf9nPO/100w.gif' }
+      }
+    }
+  ];
 
   useEffect(() => {
     // Real-time listener for posts - filtered by user's college
@@ -158,6 +197,9 @@ const Feed: React.FC = () => {
       if (gifPickerRef.current && !gifPickerRef.current.contains(event.target as Node)) {
         setShowGifPicker(false);
       }
+      if (attachmentMenuRef.current && !attachmentMenuRef.current.contains(event.target as Node)) {
+        setShowAttachmentMenu(false);
+      }
     };
 
     document.addEventListener('mousedown', handleClickOutside);
@@ -168,15 +210,47 @@ const Feed: React.FC = () => {
 
 
   const handleImageSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setImageFile(file);
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
+
+    const currentMediaCount = imageFiles.length + selectedGifs.length;
+    if (currentMediaCount + files.length > MAX_MEDIA_ITEMS) {
+      alert(`You can add up to ${MAX_MEDIA_ITEMS} media items per post`);
+      e.target.value = '';
+      return;
+    }
+
+    setImageFiles(prev => [...prev, ...files]);
+
+    files.forEach((file) => {
       const reader = new FileReader();
       reader.onloadend = () => {
-        setImagePreview(reader.result as string);
+        setImagePreviews(prev => [...prev, reader.result as string]);
       };
       reader.readAsDataURL(file);
+    });
+
+    e.target.value = '';
+  };
+
+  const removeImage = (index: number) => {
+    setImageFiles(prev => prev.filter((_, i) => i !== index));
+    setImagePreviews(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const addGif = (gifUrl: string) => {
+    const currentMediaCount = imageFiles.length + selectedGifs.length;
+    if (currentMediaCount >= MAX_MEDIA_ITEMS) {
+      alert(`You can add up to ${MAX_MEDIA_ITEMS} media items per post`);
+      return;
     }
+
+    setSelectedGifs(prev => [...prev, gifUrl]);
+    setShowGifPicker(false);
+  };
+
+  const removeGif = (index: number) => {
+    setSelectedGifs(prev => prev.filter((_, i) => i !== index));
   };
 
   // Emoji picker
@@ -206,13 +280,12 @@ const Feed: React.FC = () => {
       if (data.data) {
         setGifResults(data.data);
       } else {
-        // Fallback: Show message to configure API key
-        setGifResults([]);
-        console.warn('Giphy API key not configured. Get a free key from https://developers.giphy.com/');
+        setGifResults(fallbackGifResults);
+        console.warn('Giphy API returned no GIFs, using fallback results.');
       }
     } catch (error) {
       console.error('Error fetching GIFs:', error);
-      setGifResults([]);
+      setGifResults(fallbackGifResults);
     }
   };
 
@@ -286,7 +359,7 @@ const Feed: React.FC = () => {
   };
 
   const handlePost = async () => {
-    if (!newPostText.trim() && !selectedGif && !imageFile && !pollQuestion) return;
+    if (!newPostText.trim() && selectedGifs.length === 0 && imageFiles.length === 0 && !pollQuestion) return;
     
     if (!user) {
       alert('Please log in to create a post');
@@ -297,10 +370,10 @@ const Feed: React.FC = () => {
     try {
       let imageUrls: string[] = [];
       
-      // Upload image to Cloudinary if present
-      if (imageFile) {
+      // Upload images to Cloudinary if present
+      if (imageFiles.length > 0) {
         const postId = `temp_${Date.now()}`;
-        imageUrls = await uploadPostImages(postId, [imageFile]);
+        imageUrls = await uploadPostImages(postId, imageFiles);
       }
 
       // Upload attachment if present
@@ -344,7 +417,13 @@ const Feed: React.FC = () => {
           };
 
           // Add new features
-          if (selectedGif) postData.gifUrl = selectedGif;
+          const mediaItems = [
+            ...imageUrls.map((url) => ({ type: 'image' as const, url })),
+            ...selectedGifs.map((url) => ({ type: 'gif' as const, url }))
+          ];
+
+          if (mediaItems.length > 0) postData.mediaItems = mediaItems;
+          if (selectedGifs.length === 1 && imageUrls.length === 0) postData.gifUrl = selectedGifs[0];
           if (pollQuestion && pollOptions.filter(o => o.trim()).length >= 2) {
             const validOptions = pollOptions.filter(o => o.trim());
             const initialVotes: {[key: string]: number} = {};
@@ -378,9 +457,9 @@ const Feed: React.FC = () => {
           
           // Reset all states
           setNewPostText('');
-          setImageFile(null);
-          setImagePreview('');
-          setSelectedGif(null);
+          setImageFiles([]);
+          setImagePreviews([]);
+          setSelectedGifs([]);
           setShowPollCreator(false);
           setPollQuestion('');
           setPollOptions(['', '']);
@@ -539,13 +618,24 @@ const Feed: React.FC = () => {
     }
   };
 
+  const getPostMediaItems = (post: Post) => {
+    if (post.mediaItems && post.mediaItems.length > 0) {
+      return post.mediaItems;
+    }
+
+    const legacyImages = (post.imageUrls || []).map((url) => ({ type: 'image' as const, url }));
+    const legacyGif = post.gifUrl ? [{ type: 'gif' as const, url: post.gifUrl }] : [];
+
+    return [...legacyImages, ...legacyGif];
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 pb-4 md:pb-4 lg:pb-0 w-full max-w-full overflow-x-hidden">
       <Header title="Campus Feed" />
       
       <div className="max-w-2xl mx-auto pt-3 sm:pt-4 px-3 sm:px-4 md:px-6 lg:px-8 w-full">
         {/* Create Post Widget */}
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 sm:p-4 mb-4 sm:mb-6 w-full max-w-full overflow-hidden">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-3 sm:p-4 mb-4 sm:mb-6 w-full max-w-full overflow-visible">
           <div className="flex gap-2 sm:gap-3 mb-3">
             <img 
               src={user?.photoURL || "https://ui-avatars.com/api/?name=User"} 
@@ -561,18 +651,40 @@ const Feed: React.FC = () => {
                 onChange={(e) => setNewPostText(e.target.value)}
                 style={{ maxWidth: '100%' }}
                 />
-                {imagePreview && (
-                  <div className="mt-2 relative">
-                    <img src={imagePreview} alt="Preview" className="h-32 rounded-lg object-cover" />
-                    <button 
-                      onClick={() => {
-                        setImageFile(null);
-                        setImagePreview('');
-                      }} 
-                      className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs hover:bg-black/70"
-                    >
-                      ✕
-                    </button>
+                {(imagePreviews.length > 0 || selectedGifs.length > 0) && (
+                  <div className="mt-2 space-y-2">
+                    {imagePreviews.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+                        {imagePreviews.map((preview, index) => (
+                          <div key={`image-${index}`} className="relative flex-shrink-0 w-24 h-24">
+                            <img src={preview} alt={`Preview ${index + 1}`} className="w-full h-full rounded-lg object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removeImage(index)}
+                              className="absolute -top-2 -right-2 bg-black/60 text-white rounded-full p-1 text-xs hover:bg-black/80"
+                            >
+                              X
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    {selectedGifs.length > 0 && (
+                      <div className="flex gap-2 overflow-x-auto hide-scrollbar pb-1">
+                        {selectedGifs.map((gif, index) => (
+                          <div key={`gif-${index}`} className="relative flex-shrink-0 w-24 h-24">
+                            <img src={gif} alt={`GIF ${index + 1}`} className="w-full h-full rounded-lg object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => removeGif(index)}
+                              className="absolute -top-2 -right-2 bg-black/60 text-white rounded-full p-1 text-xs hover:bg-black/80"
+                            >
+                              X
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
                 {/* Inline Tag Input */}
@@ -646,14 +758,16 @@ const Feed: React.FC = () => {
               {tags.map((tag, index) => (
                 <span
                   key={index}
-                  className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium"
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium"
                 >
                   #{tag}
                   <button
+                    type="button"
                     onClick={() => setTags(tags.filter((_, i) => i !== index))}
-                    className="hover:text-indigo-900"
+                    className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-white/80 text-indigo-700 hover:bg-white hover:text-indigo-900 transition-colors"
+                    aria-label={`Remove tag ${tag}`}
                   >
-                    <X size={12} />
+                    <X size={10} />
                   </button>
                 </span>
               ))}
@@ -685,33 +799,20 @@ const Feed: React.FC = () => {
             </div>
           )}
 
-          {/* GIF Preview */}
-          {selectedGif && (
-            <div className="mt-2 relative">
-              <img src={selectedGif} alt="Selected GIF" className="h-32 rounded-lg object-cover" />
-              <button
-                onClick={() => setSelectedGif(null)}
-                className="absolute top-1 right-1 bg-black/50 text-white rounded-full p-1 text-xs hover:bg-black/70"
-              >
-                <X size={12} />
-              </button>
-            </div>
-          )}
-
-          <div className="flex justify-between items-center border-t border-slate-100 pt-3 mt-3 gap-2">
-            <div className="flex gap-1 sm:gap-1.5 md:gap-2 flex-wrap flex-1 min-w-0">
-              {/* Emoji Picker */}
+          <div className="flex items-end justify-between gap-2 border-t border-slate-100 pt-3 mt-3">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="relative">
                 <button
                   onClick={() => {
-                    setShowEmojiPicker(!showEmojiPicker);
+                    setShowEmojiPicker(prev => !prev);
+                    setShowAttachmentMenu(false);
                     setShowGifPicker(false);
                   }}
-                  className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation flex-shrink-0"
+                  className="p-2 rounded-full text-primary hover:bg-slate-50 transition-colors touch-manipulation flex-shrink-0"
                   title="Add Emoji"
                   aria-label="Add Emoji"
                 >
-                  <Smile size={18} className="sm:w-5 sm:h-5" />
+                  <Smile size={20} />
                 </button>
                 {showEmojiPicker && (
                   <div
@@ -734,130 +835,144 @@ const Feed: React.FC = () => {
                 )}
               </div>
 
-              {/* GIF Picker */}
               <div className="relative">
                 <button
                   onClick={() => {
-                    setShowGifPicker(!showGifPicker);
+                    setShowAttachmentMenu(prev => !prev);
                     setShowEmojiPicker(false);
-                    if (!showGifPicker) {
-                      searchGifs('trending');
-                    }
+                    setShowGifPicker(false);
                   }}
-                  className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-primary cursor-pointer transition-colors touch-manipulation flex-shrink-0"
-                  title="Add GIF"
-                  aria-label="Add GIF"
+                  className={`p-2 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
+                    showAttachmentMenu ? 'text-primary bg-indigo-50' : 'text-slate-600 hover:bg-slate-50'
+                  }`}
+                  title="Attach"
+                  aria-label="Attach"
                 >
-                  <ImageIcon size={18} className="sm:w-5 sm:h-5" />
+                  <Paperclip size={20} />
                 </button>
-                {showGifPicker && (
+
+                {showAttachmentMenu && (
                   <div
-                    ref={gifPickerRef}
-                    className="fixed sm:absolute bottom-20 sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-lg border border-slate-200 p-3 z-50"
-                    style={{ width: 'min(320px, calc(100vw - 1rem))', maxHeight: '400px' }}
+                    ref={attachmentMenuRef}
+                    className="absolute top-full mt-2 left-0 z-50 w-56 rounded-2xl border border-slate-200 bg-white p-2 shadow-xl sm:left-0"
                   >
-                    <input
-                      type="text"
-                      placeholder="Search GIFs..."
-                      value={gifSearchTerm}
-                      onChange={(e) => {
-                        setGifSearchTerm(e.target.value);
-                        searchGifs(e.target.value);
+                    <button
+                      type="button"
+                      onClick={() => {
+                        imageInputRef.current?.click();
+                        setShowAttachmentMenu(false);
                       }}
-                      className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-                    />
-                    <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
-                      {gifResults.map((gif: any) => (
-                        <button
-                          key={gif.id}
-                          onClick={() => {
-                            setSelectedGif(gif.images.fixed_height.url);
-                            setShowGifPicker(false);
-                          }}
-                          className="hover:opacity-80 transition-opacity"
-                        >
-                          <img
-                            src={gif.images.fixed_height_small.url}
-                            alt={gif.title}
-                            className="w-full rounded-lg"
-                          />
-                        </button>
-                      ))}
-                    </div>
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <Upload size={16} />
+                      <span>Photos / Videos</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowGifPicker(true);
+                        setShowAttachmentMenu(false);
+                        setShowEmojiPicker(false);
+                        searchGifs('trending');
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <ImageIcon size={16} />
+                      <span>GIF</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        fileInputRef.current?.click();
+                        setShowAttachmentMenu(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <FileText size={16} />
+                      <span>File</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPollCreator(prev => !prev);
+                        setShowAttachmentMenu(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <BarChart3 size={16} />
+                      <span>Poll</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const input = document.getElementById('tag-input') as HTMLInputElement | null;
+                        if (input) {
+                          input.style.display = 'block';
+                          input.focus();
+                        }
+                        setShowAttachmentMenu(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <Hash size={16} />
+                      <span>Tags</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        handleGetLocation();
+                        setShowAttachmentMenu(false);
+                      }}
+                      className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm text-slate-700 hover:bg-slate-50"
+                    >
+                      <MapPin size={16} />
+                      <span>Location</span>
+                    </button>
                   </div>
                 )}
               </div>
 
-              {/* Poll Creator */}
-              <button
-                onClick={() => {
-                  setShowPollCreator(!showPollCreator);
-                  setShowEmojiPicker(false);
-                  setShowGifPicker(false);
-                }}
-                className={`p-1.5 sm:p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
-                  showPollCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
-                }`}
-                title="Create Poll"
-                aria-label="Create Poll"
-              >
-                <BarChart3 size={18} className="sm:w-5 sm:h-5" />
-              </button>
+              {showGifPicker && (
+                <div
+                  ref={gifPickerRef}
+                  className="fixed bottom-20 left-2 z-50 w-[min(320px,calc(100vw-1rem))] rounded-2xl border border-slate-200 bg-white p-3 shadow-xl sm:absolute sm:bottom-auto sm:top-full sm:mt-2 sm:left-12"
+                  style={{ maxHeight: '400px' }}
+                >
+                  <input
+                    type="text"
+                    placeholder="Search GIFs..."
+                    value={gifSearchTerm}
+                    onChange={(e) => {
+                      setGifSearchTerm(e.target.value);
+                      searchGifs(e.target.value);
+                    }}
+                    className="w-full px-3 py-2 mb-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                  />
+                  <div className="grid grid-cols-2 gap-2 max-h-64 overflow-y-auto">
+                    {gifResults.map((gif: any) => (
+                      <button
+                        key={gif.id}
+                        onClick={() => addGif(gif.images.fixed_height.url)}
+                        className="hover:opacity-80 transition-opacity"
+                      >
+                        <img
+                          src={gif.images.fixed_height_small.url}
+                          alt={gif.title}
+                          className="w-full rounded-lg"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-              {/* Tag Input */}
-              <button 
-                onClick={() => {
-                  const input = document.getElementById('tag-input') as HTMLInputElement;
-                  if (input) {
-                    input.style.display = input.style.display === 'none' ? 'block' : 'none';
-                    if (input.style.display !== 'none') input.focus();
-                  }
-                }}
-                className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0"
-                title="Add Tags"
-                aria-label="Add Tags"
-              >
-                <Hash size={18} className="sm:w-5 sm:h-5" />
-              </button>
-
-              {/* Location */}
-              <button 
-                onClick={handleGetLocation}
-                className={`p-1.5 sm:p-2 hover:bg-slate-50 rounded-full transition-colors touch-manipulation flex-shrink-0 ${
-                  location ? 'text-primary bg-indigo-50' : 'text-slate-600'
-                }`}
-                title="Add Location"
-                aria-label="Add Location"
-              >
-                <MapPin size={18} className="sm:w-5 sm:h-5" />
-              </button>
-
-              {/* Image Upload */}
-              <label className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0" title="Upload Image" aria-label="Upload Image">
-                <Upload size={18} className="sm:w-5 sm:h-5" />
-                <input 
-                  type="file" 
-                  accept="image/*" 
-                  onChange={handleImageSelect}
-                  className="hidden"
-                />
-              </label>
-
-              {/* File Attachment */}
-              <label className="p-1.5 sm:p-2 hover:bg-slate-50 rounded-full text-slate-600 cursor-pointer transition-colors touch-manipulation flex-shrink-0" title="Attach File" aria-label="Attach File">
-                <FileText size={18} className="sm:w-5 sm:h-5" />
-                <input 
-                  type="file" 
-                  accept=".pdf,.doc,.docx,.txt,.zip"
-                  onChange={handleAttachmentSelect}
-                  className="hidden"
-                />
-              </label>
+              <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageSelect} className="hidden" />
+              <input ref={fileInputRef} type="file" accept=".pdf,.doc,.docx,.txt,.zip" onChange={handleAttachmentSelect} className="hidden" />
             </div>
             <button 
-                onClick={handlePost}
-                disabled={(!newPostText.trim() && !selectedGif && !imageFile && !pollQuestion) || uploading}
-                className="bg-primary hover:bg-indigo-700 text-white px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 touch-manipulation"
+              onClick={handlePost}
+              disabled={(!newPostText.trim() && selectedGifs.length === 0 && imageFiles.length === 0 && !pollQuestion) || uploading}
+              className="bg-primary hover:bg-indigo-700 text-white px-4 sm:px-5 md:px-6 py-2 sm:py-2.5 rounded-full text-xs sm:text-sm font-semibold transition-colors disabled:opacity-50 flex items-center gap-1.5 sm:gap-2 touch-manipulation"
             >
               {uploading ? (
                 <>
@@ -1077,18 +1192,37 @@ const Feed: React.FC = () => {
                     )}
                 </div>
 
-                {/* GIF */}
-                {post.gifUrl && (
+                {/* Media Carousel */}
+                {getPostMediaItems(post).length > 0 && (
                   <div className="w-full bg-slate-100">
-                    <img src={post.gifUrl} alt="GIF" className="w-full h-auto max-h-[500px] object-cover" />
-                  </div>
-                )}
+                    <div className="relative w-full aspect-[4/5] sm:aspect-video overflow-hidden">
+                      <div className="flex h-full w-full overflow-x-auto snap-x snap-mandatory scroll-smooth hide-scrollbar">
+                        {getPostMediaItems(post).map((media, index) => (
+                          <div
+                            key={`${post.id}-media-${index}`}
+                            className="w-full h-full flex-shrink-0 snap-center bg-slate-100"
+                          >
+                            <img
+                              src={media.url}
+                              alt={`${post.content || post.authorName} media ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                          </div>
+                        ))}
+                      </div>
 
-                {/* Image */}
-                {post.imageUrls?.[0] && !post.gifUrl && (
-                    <div className="w-full bg-slate-100">
-                    <img src={post.imageUrls[0]} alt="Post content" className="w-full h-auto max-h-[500px] object-cover" />
+                      {getPostMediaItems(post).length > 1 && (
+                        <div className="absolute bottom-2 left-0 right-0 flex justify-center gap-1.5">
+                          {getPostMediaItems(post).map((_, index) => (
+                            <span
+                              key={`${post.id}-dot-${index}`}
+                              className="h-1.5 w-1.5 rounded-full bg-white/90 shadow-sm"
+                            />
+                          ))}
+                        </div>
+                      )}
                     </div>
+                  </div>
                 )}
 
                 <div className="p-3 sm:p-4 flex items-center justify-between border-t border-slate-100 gap-2">

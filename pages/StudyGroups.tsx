@@ -1,9 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Send, Bot, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search, Smile, FileText, BarChart3, Video, File, Hash, MapPin, Download } from 'lucide-react';
+import { Send, Users, BookOpen, ChevronRight, MoreVertical, ArrowLeft, Plus, X, Upload, Image as ImageIcon, Lock, Globe, Search, Smile, FileText, BarChart3, Video, File, Hash, MapPin, Download, MessageCircle } from 'lucide-react';
 import { StudyGroup, ChatMessage } from '../types';
 import Header from '../components/Header';
 import SuccessModal from '../components/SuccessModal';
-import { generateStudyHelp } from '../services/geminiService';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
 import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit, getDocs, doc, updateDoc, increment, setDoc, getDoc, where } from 'firebase/firestore';
@@ -16,7 +15,6 @@ const StudyGroups: React.FC = () => {
   const [selectedGroup, setSelectedGroup] = useState<StudyGroup | null>(null);
   const [messageText, setMessageText] = useState('');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [isTyping, setIsTyping] = useState(false);
   const [groups, setGroups] = useState<StudyGroup[]>([]);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
@@ -968,35 +966,6 @@ const StudyGroups: React.FC = () => {
           alert('No content to send. Please add text, image, attachment, sticker, or poll.');
         }
 
-        // Check for AI invocation
-        if (text.toLowerCase().includes('@ai')) {
-            setIsTyping(true);
-            try {
-              // Extract question and generate AI response
-              const aiResponse = await generateStudyHelp(text, selectedGroup.subject || 'General Studies');
-            
-              // Add AI response to Firestore
-            await addDoc(collection(db, "groups", selectedGroup.id, "messages"), {
-                text: aiResponse,
-                senderId: 'ai-bot',
-                  senderName: 'Study Buddy',
-                timestamp: serverTimestamp(),
-                isAi: true
-            });
-            } catch (aiError: any) {
-              console.error('AI Error:', aiError);
-              // Add error message as AI response
-              await addDoc(collection(db, "groups", selectedGroup.id, "messages"), {
-                  text: "I'm having trouble right now. Please try again in a moment! If this persists, check your Grok API key configuration.",
-                  senderId: 'ai-bot',
-                  senderName: 'Study Buddy',
-                timestamp: serverTimestamp(),
-                    isAi: true
-            });
-            } finally {
-            setIsTyping(false);
-        }
-        }
     } catch (e: any) {
         console.error("Failed to send message:", e);
         const errorMessage = e.message || 'Failed to send message. Please try again.';
@@ -1259,7 +1228,7 @@ const StudyGroups: React.FC = () => {
             <h3 className="font-bold text-slate-900 text-sm sm:text-base leading-tight truncate">{selectedGroup.name}</h3>
             <div className="flex items-center gap-1">
               <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></span>
-              <p className="text-[10px] sm:text-xs text-slate-500 truncate">{selectedGroup.memberCount || 0} members • AI Active</p>
+              <p className="text-[10px] sm:text-xs text-slate-500 truncate">{selectedGroup.memberCount || 0} members • Group chat</p>
             </div>
           </div>
         </div>
@@ -1299,9 +1268,9 @@ const StudyGroups: React.FC = () => {
       >
         {messages.length === 0 && (
           <div className="text-center text-slate-400 text-sm mt-10">
-            <Bot size={48} className="mx-auto text-indigo-300 mb-3" />
+            <MessageCircle size={48} className="mx-auto text-indigo-300 mb-3" />
             <p>Start the conversation!</p>
-            <p className="text-xs mt-2">Mention @AI to get study help</p>
+            <p className="text-xs mt-2">Send a message to start chatting</p>
           </div>
         )}
         
@@ -1321,18 +1290,10 @@ const StudyGroups: React.FC = () => {
                 <div className={`max-w-[88%] md:max-w-[70%] rounded-2xl p-3.5 text-sm shadow-sm ${
                 isMe 
                     ? 'bg-primary text-white rounded-br-md' 
-                    : msg.isAi 
-                    ? 'bg-white border-2 border-indigo-100 text-slate-800 rounded-bl-none'
                     : 'bg-white border border-slate-100 text-slate-800 rounded-bl-none'
                 }`}>
-                {msg.isAi && (
-                    <div className="flex items-center gap-2 mb-1 text-indigo-600 text-xs font-bold uppercase tracking-wider">
-                    <Bot size={14} />
-                    Study Buddy
-                    </div>
-                )}
                 {/* WhatsApp-style sender label for group chats */}
-                {!isMe && !msg.isAi && (
+                {!isMe && (
                   <p className="text-[11px] font-semibold text-slate-500 mb-1">
                     {msg.senderName || 'Unknown'}
                   </p>
@@ -1452,17 +1413,6 @@ const StudyGroups: React.FC = () => {
             </div>
           );
         })}
-        {isTyping && (
-          <div className="flex justify-start">
-            <div className="bg-white border-2 border-indigo-100 rounded-2xl p-3 rounded-bl-none">
-              <div className="flex gap-1">
-                <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></span>
-                <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '0.1s'}}></span>
-                <span className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{animationDelay: '0.2s'}}></span>
-              </div>
-            </div>
-          </div>
-        )}
         <div ref={messagesEndRef} />
       </div>
 
