@@ -17,6 +17,7 @@ import Onboarding from './pages/Onboarding';
 import Messages from './pages/Messages';
 import Timetable from './pages/Timetable';
 import Resources from './pages/Resources';
+import TimetableReminderEngine from './components/TimetableReminderEngine';
 
 // Auth Context
 interface AuthContextType {
@@ -63,6 +64,7 @@ const Layout = ({ children }: { children?: React.ReactNode }) => {
   return (
     <div className="flex flex-col min-h-screen bg-slate-50 w-full max-w-full overflow-x-hidden">
       <Navigation />
+      <TimetableReminderEngine />
       <main className={`flex-1 w-full max-w-full overflow-x-hidden ${isChat ? 'h-screen overflow-hidden' : ''} lg:pt-16`}>
         <div className="w-full max-w-full overflow-x-hidden">
           {children}

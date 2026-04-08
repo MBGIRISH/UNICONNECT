@@ -128,6 +128,8 @@ const POPULAR_COLLEGES = [
   'Other (Enter Your College)'
 ];
 
+const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '').slice(0, 10);
+
 const Profile: React.FC = () => {
   const { userId } = useParams();
   const { user: currentUser } = useAuth();
@@ -256,6 +258,11 @@ const Profile: React.FC = () => {
 
       // College cannot be changed - use existing college from profile
       const finalCollege = profile.college;
+      const normalizedPhone = normalizePhoneNumber(editData.phone);
+
+      if (normalizedPhone.length !== 10) {
+        throw new Error('Please enter exactly 10 digits for your phone number.');
+      }
 
       // Upload new avatar if selected (using Cloudinary - free!)
       if (avatarFile) {
@@ -273,7 +280,7 @@ const Profile: React.FC = () => {
         bio: editData.bio,
         college: finalCollege,
         location: editData.location,
-        phone: editData.phone,
+        phone: normalizedPhone,
         website: editData.website,
         socialLinks: {
           twitter: editData.twitter,
@@ -575,14 +582,17 @@ const Profile: React.FC = () => {
                     
                     <div className="relative">
                       <Phone className="absolute left-3 top-3 text-slate-400" size={18} />
-                      <input
-                        type="tel"
-                        value={editData.phone}
-                        onChange={(e) => setEditData({ ...editData, phone: e.target.value })}
-                        placeholder="Phone"
-                        className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                      />
-                    </div>
+                    <input
+                      type="tel"
+                      value={editData.phone}
+                      onChange={(e) => setEditData({ ...editData, phone: normalizePhoneNumber(e.target.value) })}
+                      placeholder="Phone"
+                      inputMode="numeric"
+                      maxLength={10}
+                      pattern="[0-9]{10}"
+                      className="w-full pl-10 pr-4 py-3 bg-slate-50 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
                     
                     <div className="relative md:col-span-2">
                       <Globe className="absolute left-3 top-3 text-slate-400" size={18} />

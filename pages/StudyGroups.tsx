@@ -5,7 +5,7 @@ import Header from '../components/Header';
 import SuccessModal from '../components/SuccessModal';
 import { db } from '../firebaseConfig';
 import { useAuth } from '../App';
-import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit, getDocs, doc, updateDoc, increment, setDoc, getDoc, where } from 'firebase/firestore';
+import { collection, addDoc, query, orderBy, onSnapshot, serverTimestamp, limit, getDocs, doc, updateDoc, increment, setDoc, getDoc, where, runTransaction } from 'firebase/firestore';
 import ImageLightbox from '../components/chat/ImageLightbox';
 import LocationCard from '../components/chat/LocationCard';
 import FileAttachmentCard from '../components/chat/FileAttachmentCard';
@@ -19,6 +19,7 @@ const StudyGroups: React.FC = () => {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showJoinModal, setShowJoinModal] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [membershipLoading, setMembershipLoading] = useState(true);
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState('');
   const [uploading, setUploading] = useState(false);
@@ -29,6 +30,7 @@ const StudyGroups: React.FC = () => {
   const [gifResults, setGifResults] = useState<any[]>([]);
   const [selectedGif, setSelectedGif] = useState<string | null>(null);
   const [showPollCreator, setShowPollCreator] = useState(false);
+  const [showTagCreator, setShowTagCreator] = useState(false);
   const [pollQuestion, setPollQuestion] = useState('');
   const [pollOptions, setPollOptions] = useState(['', '']);
   const [tags, setTags] = useState<string[]>([]);
@@ -40,6 +42,7 @@ const StudyGroups: React.FC = () => {
   const emojiPickerRef = useRef<HTMLDivElement>(null);
   const gifPickerRef = useRef<HTMLDivElement>(null);
   const [myGroupIds, setMyGroupIds] = useState<Set<string>>(new Set());
+  const [pendingJoinRequestGroupIds, setPendingJoinRequestGroupIds] = useState<Set<string>>(new Set());
   const [joinRequests, setJoinRequests] = useState<any[]>([]);
   const [showRequestsModal, setShowRequestsModal] = useState(false);
   const [showJoinRequestSuccess, setShowJoinRequestSuccess] = useState(false);
@@ -93,9 +96,19 @@ const StudyGroups: React.FC = () => {
   });
 
   useEffect(() => {
+    if (!user || !db) {
+      setGroups([]);
+      setMyGroupIds(new Set());
+      setPendingJoinRequestGroupIds(new Set());
+      setUserRole(new Map());
+      setLoading(false);
+      setMembershipLoading(false);
+      return;
+    }
+
     loadGroups();
     loadMyGroups();
-  }, []);
+  }, [user?.uid]);
 
   // Debug: Log when files change to verify send button state
   useEffect(() => {
@@ -160,6 +173,13 @@ const StudyGroups: React.FC = () => {
           
           // Get actual member count from members subcollection
           try {
+            if (!db) {
+              return {
+                id: groupDoc.id,
+                ...groupData,
+                memberCount: groupData.memberCount || 0
+              } as StudyGroup;
+            }
             const membersSnapshot = await getDocs(collection(db, "groups", groupDoc.id, "members"));
             const actualMemberCount = membersSnapshot.size;
             
@@ -190,7 +210,11 @@ const StudyGroups: React.FC = () => {
   };
 
   const loadMyGroups = async () => {
-    if (!user || !db) return;
+    if (!user || !db) {
+      setMembershipLoading(false);
+      return;
+    }
+    setMembershipLoading(true);
     try {
       // Get user's college from profile
       const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -198,7 +222,9 @@ const StudyGroups: React.FC = () => {
 
       if (!userCollege) {
         setMyGroupIds(new Set());
+        setPendingJoinRequestGroupIds(new Set());
         setUserRole(new Map());
+        setMembershipLoading(false);
         return;
       }
 
@@ -211,6 +237,7 @@ const StudyGroups: React.FC = () => {
       
       const groupsSnapshot = await getDocs(q);
       const myIds = new Set<string>();
+      const pendingRequestIds = new Set<string>();
       const roles = new Map<string, string>();
       
       for (const groupDoc of groupsSnapshot.docs) {
@@ -219,13 +246,22 @@ const StudyGroups: React.FC = () => {
           myIds.add(groupDoc.id);
           const memberData = memberDoc.data();
           roles.set(groupDoc.id, memberData.role || 'member');
+          continue;
+        }
+
+        const joinRequestDoc = await getDoc(doc(db, 'groups', groupDoc.id, 'joinRequests', user.uid));
+        if (joinRequestDoc.exists() && joinRequestDoc.data()?.status === 'pending') {
+          pendingRequestIds.add(groupDoc.id);
         }
       }
       
       setMyGroupIds(myIds);
+      setPendingJoinRequestGroupIds(pendingRequestIds);
       setUserRole(roles);
     } catch (error) {
       console.error('Error loading my groups:', error);
+    } finally {
+      setMembershipLoading(false);
     }
   };
 
@@ -514,6 +550,21 @@ const StudyGroups: React.FC = () => {
 
       const groupData = groupSnap.data();
       const isPrivate = groupData.isPrivate || false;
+      const memberRef = doc(db, 'groups', groupId, 'members', user.uid);
+      const existingMember = await getDoc(memberRef);
+
+      if (existingMember.exists()) {
+        setMyGroupIds(prev => new Set(prev).add(groupId));
+        setPendingJoinRequestGroupIds(prev => {
+          const next = new Set(prev);
+          next.delete(groupId);
+          return next;
+        });
+        setSuccessMessage('You are already a member of this group.');
+        setShowSuccessModal(true);
+        loadMyGroups();
+        return;
+      }
 
       if (isPrivate) {
         // For private groups, create a join request
@@ -523,10 +574,17 @@ const StudyGroups: React.FC = () => {
         if (existingRequest.exists()) {
           const requestData = existingRequest.data();
           if (requestData.status === 'pending') {
+            setPendingJoinRequestGroupIds(prev => new Set(prev).add(groupId));
             alert('You already have a pending join request for this group.');
             return;
           } else if (requestData.status === 'approved') {
-            alert('Your request was already approved! You should be able to access this group.');
+            setPendingJoinRequestGroupIds(prev => {
+              const next = new Set(prev);
+              next.delete(groupId);
+              return next;
+            });
+            setSuccessMessage('Your join request was approved. You can now access this group.');
+            setShowSuccessModal(true);
             loadMyGroups();
             return;
           }
@@ -543,40 +601,51 @@ const StudyGroups: React.FC = () => {
           createdAt: serverTimestamp()
         });
 
+        setPendingJoinRequestGroupIds(prev => new Set(prev).add(groupId));
         setShowJoinModal(false);
         loadGroups();
+        loadMyGroups();
         // Show success modal instead of alert
         setShowJoinRequestSuccess(true);
       } else {
         // For public groups, join directly
-        // Check if already a member
-        const memberRef = doc(db, 'groups', groupId, 'members', user.uid);
-        const memberSnap = await getDoc(memberRef);
-        
-        if (memberSnap.exists()) {
-          alert('You are already a member of this group!');
-          loadMyGroups();
-          return;
-        }
+        const joinResult = await runTransaction(db, async (transaction) => {
+          const memberSnap = await transaction.get(memberRef);
 
-        // Add user to members
-        await setDoc(memberRef, {
-          userId: user.uid,
-          userName: user.displayName || 'User',
-          role: 'member',
-          joinedAt: serverTimestamp()
-        });
+          if (memberSnap.exists()) {
+            return 'already-member';
+          }
 
-        // Increment member count
-        await updateDoc(groupRef, {
-          members: increment(1)
+          transaction.set(memberRef, {
+            userId: user.uid,
+            userName: user.displayName || 'User',
+            role: 'member',
+            joinedAt: serverTimestamp()
+          });
+
+          transaction.update(groupRef, {
+            members: increment(1)
+          });
+
+          return 'joined';
         });
 
         setMyGroupIds(prev => new Set(prev).add(groupId));
+        setPendingJoinRequestGroupIds(prev => {
+          const next = new Set(prev);
+          next.delete(groupId);
+          return next;
+        });
+        setGroups(prev => prev.map(group =>
+          group.id === groupId && joinResult === 'joined'
+            ? { ...group, memberCount: (group.memberCount || 0) + 1 }
+            : group
+        ));
         setShowJoinModal(false);
-        setSuccessMessage('Joined group successfully! 🎉');
+        setSuccessMessage(joinResult === 'joined' ? 'Joined group successfully! 🎉' : 'You are already a member of this group.');
         setShowSuccessModal(true);
         loadGroups();
+        loadMyGroups();
       }
     } catch (error) {
       console.error(error);
@@ -588,26 +657,58 @@ const StudyGroups: React.FC = () => {
     if (!selectedGroup || !user || !db) return;
 
     try {
-      // Add user to members
-      await setDoc(doc(db, 'groups', selectedGroup.id, 'members', userId), {
-        userId,
-        userName,
-        role: 'member',
-        joinedAt: serverTimestamp()
-      });
+      const groupRef = doc(db, 'groups', selectedGroup.id);
+      const memberRef = doc(db, 'groups', selectedGroup.id, 'members', userId);
+      const requestRef = doc(db, 'groups', selectedGroup.id, 'joinRequests', requestId);
+      const approvalResult = await runTransaction(db, async (transaction) => {
+        const memberSnap = await transaction.get(memberRef);
+        const requestSnap = await transaction.get(requestRef);
 
-      // Update request status
-      await updateDoc(doc(db, 'groups', selectedGroup.id, 'joinRequests', requestId), {
-        status: 'approved'
-      });
+        if (!requestSnap.exists()) {
+          return 'missing-request';
+        }
 
-      // Increment member count
-      await updateDoc(doc(db, 'groups', selectedGroup.id), {
-        members: increment(1)
+        const requestData = requestSnap.data();
+        if (requestData?.status !== 'pending') {
+          return 'already-processed';
+        }
+
+        if (!memberSnap.exists()) {
+          transaction.set(memberRef, {
+            userId,
+            userName,
+            role: 'member',
+            joinedAt: serverTimestamp()
+          });
+          transaction.update(groupRef, {
+            members: increment(1)
+          });
+        }
+
+        transaction.update(requestRef, {
+          status: 'approved'
+        });
+
+        return memberSnap.exists() ? 'already-member' : 'approved';
       });
 
       loadMyGroups();
-      alert(`${userName} has been added to the group!`);
+      if (approvalResult === 'approved') {
+        setSelectedGroup(prev => prev ? { ...prev, memberCount: (prev.memberCount || 0) + 1 } : prev);
+        setGroups(prev => prev.map(group =>
+          group.id === selectedGroup.id
+            ? { ...group, memberCount: (group.memberCount || 0) + 1 }
+            : group
+        ));
+      }
+      setSuccessMessage(
+        approvalResult === 'approved'
+          ? `${userName} has been added to the group.`
+          : approvalResult === 'already-member'
+            ? `${userName} is already in the group.`
+            : 'This join request was already handled.'
+      );
+      setShowSuccessModal(true);
     } catch (error) {
       console.error('Error approving request:', error);
       alert('Failed to approve request');
@@ -1014,6 +1115,16 @@ const StudyGroups: React.FC = () => {
 
   const myGroups = groups.filter(g => myGroupIds.has(g.id));
   const availableGroups = groups.filter(g => !myGroupIds.has(g.id));
+  const initialGroupsLoading = loading || membershipLoading;
+  const isJoinRequestPending = (groupId: string) => pendingJoinRequestGroupIds.has(groupId);
+  const getJoinButtonLabel = (group: StudyGroup) =>
+    isJoinRequestPending(group.id) ? 'Requested' : group.isPrivate ? 'Request to Join' : 'Join';
+  const getJoinButtonClass = (groupId: string, compact = false) =>
+    `${compact ? 'ml-2 px-4 py-2' : 'ml-2 px-4 py-1.5 whitespace-nowrap'} rounded-lg text-sm font-medium transition-colors ${
+      isJoinRequestPending(groupId)
+        ? 'bg-slate-200 text-slate-500 cursor-not-allowed'
+        : 'bg-primary text-white hover:bg-indigo-700'
+    }`;
 
   // Group List View
   if (!selectedGroup) {
@@ -1042,7 +1153,12 @@ const StudyGroups: React.FC = () => {
           {/* My Groups */}
           <div className="mb-6">
             <h2 className="text-lg font-bold text-slate-800 mb-3">My Groups ({myGroups.length})</h2>
-            {myGroups.length === 0 ? (
+            {initialGroupsLoading ? (
+              <div className="bg-white p-8 rounded-xl border border-slate-100 text-center">
+                <Users size={48} className="mx-auto text-slate-300 mb-3 animate-pulse" />
+                <p className="text-slate-500 mb-2">Loading your groups...</p>
+              </div>
+            ) : myGroups.length === 0 ? (
               <div className="bg-white p-8 rounded-xl border border-slate-100 text-center">
                 <Users size={48} className="mx-auto text-slate-300 mb-3" />
                 <p className="text-slate-500 mb-2">You haven't joined any groups yet</p>
@@ -1078,7 +1194,12 @@ const StudyGroups: React.FC = () => {
           {/* All Groups */}
           <div>
             <h2 className="text-lg font-bold text-slate-800 mb-3">Discover Groups ({availableGroups.length})</h2>
-            {availableGroups.length === 0 ? (
+            {initialGroupsLoading ? (
+              <div className="bg-white p-8 rounded-xl border border-slate-100 text-center">
+                <Users size={48} className="mx-auto text-slate-300 mb-3 animate-pulse" />
+                <p className="text-slate-500 mb-2">Loading groups...</p>
+              </div>
+            ) : availableGroups.length === 0 ? (
               <div className="bg-white p-8 rounded-xl border border-slate-100 text-center">
                 <Users size={48} className="mx-auto text-slate-300 mb-3" />
                 <p className="text-slate-500 mb-2">No groups available yet</p>
@@ -1113,9 +1234,10 @@ const StudyGroups: React.FC = () => {
                     </div>
                     <button
                       onClick={() => handleJoinGroup(group.id)}
-                      className="ml-2 px-4 py-1.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors whitespace-nowrap"
+                      disabled={isJoinRequestPending(group.id)}
+                      className={getJoinButtonClass(group.id)}
                     >
-                      {group.isPrivate ? 'Request to Join' : 'Join'}
+                      {getJoinButtonLabel(group)}
                     </button>
                   </div>
                 </div>
@@ -1198,7 +1320,12 @@ const StudyGroups: React.FC = () => {
                 </button>
               </div>
               <div className="p-6 space-y-3">
-                {availableGroups.length === 0 ? (
+                {initialGroupsLoading ? (
+                  <div className="text-center py-8">
+                    <Users size={48} className="mx-auto text-slate-300 mb-3 animate-pulse" />
+                    <p className="text-slate-500">Loading groups...</p>
+                  </div>
+                ) : availableGroups.length === 0 ? (
                   <div className="text-center py-8">
                     <Users size={48} className="mx-auto text-slate-300 mb-3" />
                     <p className="text-slate-500">No groups available to join</p>
@@ -1219,9 +1346,10 @@ const StudyGroups: React.FC = () => {
                         </div>
                         <button
                           onClick={() => handleJoinGroup(group.id)}
-                          className="ml-2 px-4 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                          disabled={isJoinRequestPending(group.id)}
+                          className={getJoinButtonClass(group.id, true)}
                         >
-                          {group.isPrivate ? 'Request to Join' : 'Join'}
+                          {getJoinButtonLabel(group)}
                         </button>
                       </div>
                     </div>
@@ -1548,7 +1676,7 @@ const StudyGroups: React.FC = () => {
         )}
 
         {/* Icons Row - Toolbar - Compact on mobile */}
-        <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto hide-scrollbar w-full max-w-full -mx-1 px-1 flex-nowrap pt-0.5">
+        <div className="flex items-center gap-1 sm:gap-1.5 overflow-x-auto md:overflow-visible hide-scrollbar w-full max-w-full -mx-1 px-1 flex-nowrap pt-0.5">
           {/* Emoji Picker */}
           <div className="relative flex-shrink-0">
             <button
@@ -1565,7 +1693,7 @@ const StudyGroups: React.FC = () => {
             {showEmojiPicker && (
               <div
                 ref={emojiPickerRef}
-                className="fixed sm:absolute bottom-[105px] sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[80] max-h-48 overflow-y-auto"
+                className="fixed md:absolute bottom-[105px] md:bottom-full left-2 md:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[80] max-h-48 overflow-y-auto"
                 style={{ width: 'min(280px, calc(100vw - 1rem))' }}
               >
                 <div className="grid grid-cols-5 gap-2">
@@ -1619,7 +1747,7 @@ const StudyGroups: React.FC = () => {
             {showGifPicker && (
               <div
                 ref={gifPickerRef}
-                className="fixed sm:absolute bottom-[105px] sm:bottom-full left-2 sm:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[80]"
+                className="fixed md:absolute bottom-[105px] md:bottom-full left-2 md:left-0 mb-2 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-[80]"
                 style={{ width: 'min(320px, calc(100vw - 1rem))', maxHeight: '400px' }}
               >
                 <input
@@ -1658,6 +1786,7 @@ const StudyGroups: React.FC = () => {
           <button
             onClick={() => {
               setShowPollCreator(!showPollCreator);
+              setShowTagCreator(false);
               setShowEmojiPicker(false);
               setShowGifPicker(false);
             }}
@@ -1673,13 +1802,14 @@ const StudyGroups: React.FC = () => {
           {/* Tag Input */}
           <button
             onClick={() => {
-              const input = document.getElementById('tag-input') as HTMLInputElement;
-              if (input) {
-                input.style.display = input.style.display === 'none' ? 'block' : 'none';
-                if (input.style.display !== 'none') input.focus();
-              }
+              setShowTagCreator(!showTagCreator);
+              setShowPollCreator(false);
+              setShowEmojiPicker(false);
+              setShowGifPicker(false);
             }}
-            className="p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full text-slate-600 transition-colors touch-manipulation flex-shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center"
+            className={`p-1.5 sm:p-2 hover:bg-slate-50 active:bg-slate-100 rounded-full transition-colors touch-manipulation flex-shrink-0 min-w-[36px] min-h-[36px] sm:min-w-[40px] sm:min-h-[40px] flex items-center justify-center ${
+              showTagCreator ? 'text-primary bg-indigo-50' : 'text-slate-600'
+            }`}
             title="Add Tags"
             aria-label="Add Tags"
           >
@@ -1721,36 +1851,51 @@ const StudyGroups: React.FC = () => {
           </label>
         </div>
 
-        {/* Inline Tag Input */}
-        <input
-          id="tag-input"
-          type="text"
-          placeholder="#tag (press Enter)"
-          value={tagInput}
-          onChange={(e) => setTagInput(e.target.value)}
-          onKeyPress={handleTagInput}
-          className="mt-2 w-full px-3 py-1.5 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-          style={{ display: 'none' }}
-        />
-
-        {/* Tags */}
-        {tags.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-2 w-full max-w-full">
-            {tags.map((tag, index) => (
-              <span
-                key={index}
-                className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium max-w-full"
+        {showTagCreator && (
+          <div className="mt-2 p-2.5 sm:p-3 bg-slate-50 rounded-xl border border-slate-200 w-full max-w-full">
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-semibold text-sm text-slate-700">Add Tags</h4>
+              <button
+                onClick={() => {
+                  setShowTagCreator(false);
+                  setTagInput('');
+                  setTags([]);
+                }}
+                className="text-slate-400 hover:text-slate-600 touch-manipulation p-1 min-w-[32px] min-h-[32px] flex items-center justify-center"
+                aria-label="Close tag creator"
               >
-                <span className="truncate">#{tag}</span>
-                <button
-                  onClick={() => setTags(tags.filter((_, i) => i !== index))}
-                  className="hover:text-indigo-900 touch-manipulation p-0.5 flex-shrink-0"
-                  aria-label={`Remove tag ${tag}`}
-                >
-                  <X size={12} />
-                </button>
-              </span>
-            ))}
+                <X size={16} />
+              </button>
+            </div>
+            <input
+              id="tag-input"
+              type="text"
+              placeholder="#tag (press Enter)"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+              onKeyDown={handleTagInput}
+              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+            />
+
+            {tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-2 w-full max-w-full">
+                {tags.map((tag, index) => (
+                  <span
+                    key={index}
+                    className="inline-flex items-center gap-1 px-2 py-1 bg-indigo-100 text-indigo-700 rounded-full text-xs font-medium max-w-full"
+                  >
+                    <span className="truncate">#{tag}</span>
+                    <button
+                      onClick={() => setTags(tags.filter((_, i) => i !== index))}
+                      className="w-4 h-4 rounded-full bg-white/80 border border-indigo-200 text-slate-500 hover:text-slate-700 hover:border-indigo-300 touch-manipulation flex items-center justify-center flex-shrink-0 leading-none"
+                      aria-label={`Remove tag ${tag}`}
+                    >
+                      <X size={10} strokeWidth={2.5} />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         )}
 

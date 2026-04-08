@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2, Edit2, Clock, MapPin, User, Bell, X, AlertCircle } from 'lucide-react';
 import Header from '../components/Header';
 import { useAuth } from '../App';
@@ -6,7 +6,7 @@ import { db } from '../firebaseConfig';
 import { collection, addDoc, getDocs, deleteDoc, doc, query, where, serverTimestamp } from 'firebase/firestore';
 import { addNotification } from '../services/notificationService';
 import ConfirmDialog from '../components/ConfirmDialog';
-import TimePicker12h from '../components/TimePicker12h';
+import TimePicker12h, { to12h } from '../components/TimePicker12h';
 
 interface ClassItem {
   id: string;
@@ -22,6 +22,19 @@ interface ClassItem {
 const DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 const COLORS = ['#6366f1', '#8b5cf6', '#ec4899', '#f97316', '#10b981', '#14b8a6', '#06b6d4', '#3b82f6'];
 
+function formatTime12h(value24: string) {
+  const parsed = to12h(value24);
+  const minute = String(parsed.minute).padStart(2, '0');
+  return `${parsed.hour12}:${minute} ${parsed.ampm}`;
+}
+
+function toMinutes(value24: string) {
+  const [hhStr, mmStr] = (value24 || '00:00').split(':');
+  const hh = Math.min(23, Math.max(0, parseInt(hhStr || '0', 10) || 0));
+  const mm = Math.min(59, Math.max(0, parseInt(mmStr || '0', 10) || 0));
+  return hh * 60 + mm;
+}
+
 const Timetable: React.FC = () => {
   const { user } = useAuth();
   const [classes, setClasses] = useState<ClassItem[]>([]);
@@ -30,8 +43,9 @@ const Timetable: React.FC = () => {
   const [upcomingClass, setUpcomingClass] = useState<ClassItem | null>(null);
   const [ongoingClass, setOngoingClass] = useState<ClassItem | null>(null);
   const [notifiedClasses, setNotifiedClasses] = useState<Set<string>>(new Set());
-  const [lastNotificationDate, setLastNotificationDate] = useState<string>('');
+  const lastNotificationDateRef = useRef<string>('');
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
   
   const [newClass, setNewClass] = useState({
     subject: '',
@@ -47,13 +61,6 @@ const Timetable: React.FC = () => {
     if (user) {
       loadClasses();
     }
-    
-    // Request notification permission on mount
-    if ('Notification' in window && Notification.permission === 'default') {
-      Notification.requestPermission().catch(err => {
-        console.error('Error requesting notification permission:', err);
-      });
-    }
   }, [user]);
 
   // Check for upcoming and ongoing classes every minute
@@ -62,15 +69,15 @@ const Timetable: React.FC = () => {
 
     const checkClassReminders = () => {
       const now = new Date();
-      const currentDate = now.toDateString();
       
-      // Reset notification state if it's a new day (prevents "never notify again" after midnight)
-      if (lastNotificationDate !== currentDate) {
-        setLastNotificationDate(currentDate);
-        setNotifiedClasses(new Set());
+      // Timetable UI doesn't include Sunday; avoid incorrectly treating Sunday as Saturday.
+      if (now.getDay() === 0) {
+        setOngoingClass(null);
+        setUpcomingClass(null);
+        return;
       }
-      
-      const currentDay = DAYS[now.getDay() === 0 ? 5 : now.getDay() - 1]; // Sunday = Saturday index
+
+      const currentDay = DAYS[now.getDay() - 1];
       const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
 
       const todayClasses = classes.filter(c => c.day === currentDay);
@@ -81,7 +88,7 @@ const Timetable: React.FC = () => {
 
       // Check for upcoming classes (5-10 minutes before start time)
       const upcoming = todayClasses.find(c => {
-        const classStartMinutes = parseInt(c.startTime.split(':')[0]) * 60 + parseInt(c.startTime.split(':')[1]);
+        const classStartMinutes = toMinutes(c.startTime);
         const nowMinutes = now.getHours() * 60 + now.getMinutes();
         const diffMinutes = classStartMinutes - nowMinutes;
         
@@ -102,18 +109,21 @@ const Timetable: React.FC = () => {
           newSet.add(upcoming.id);
           
           setUpcomingClass(upcoming);
+          // Notifications are handled globally (see TimetableReminderEngine).
+          return newSet;
           
           // Calculate minutes until class
-          const classStartMinutes = parseInt(upcoming.startTime.split(':')[0]) * 60 + parseInt(upcoming.startTime.split(':')[1]);
+          const classStartMinutes = toMinutes(upcoming.startTime);
           const nowMinutes = now.getHours() * 60 + now.getMinutes();
           const minutesUntil = classStartMinutes - nowMinutes;
+          const timeLabel = formatTime12h(upcoming.startTime);
           
           // Send notification to Firestore
           if (user && db) {
             addNotification(user.uid, {
               type: 'class_reminder',
               title: 'Class Starting Soon',
-              message: `${upcoming.subject} starts in ${minutesUntil} minutes at ${upcoming.startTime} in ${upcoming.location}`,
+              message: `${upcoming.subject} starts in ${minutesUntil} minutes at ${timeLabel} in ${upcoming.location}`,
               link: '/timetable',
               createdAt: new Date()
             }).catch(err => console.error('Failed to add notification:', err));
@@ -123,7 +133,7 @@ const Timetable: React.FC = () => {
           if ('Notification' in window && Notification.permission === 'granted') {
             try {
               new Notification('📚 Class Reminder', {
-                body: `${upcoming.subject} starts in ${minutesUntil} minutes\nTime: ${upcoming.startTime}\nLocation: ${upcoming.location}${upcoming.professor ? `\nProfessor: ${upcoming.professor}` : ''}`,
+                body: `${upcoming.subject} starts in ${minutesUntil} minutes\nTime: ${timeLabel}\nLocation: ${upcoming.location}${upcoming.professor ? `\nProfessor: ${upcoming.professor}` : ''}`,
                 tag: `class-${upcoming.id}`,
                 requireInteraction: false
               });
@@ -148,6 +158,53 @@ const Timetable: React.FC = () => {
 
     return () => clearInterval(interval);
   }, [classes, user, db]);
+
+  /* Test notification helper (removed)
+  const handleTestNotification = async () => {
+    try {
+      if (!user) {
+        alert('Please login to test notifications.');
+        return;
+      }
+
+      // Always write an in-app notification (Header bell) to verify Firestore + rules.
+      if (db) {
+        await addNotification(user.uid, {
+          type: 'class_reminder',
+          title: 'Test Timetable Notification',
+          message: 'This is a test notification from Timetable.',
+          link: '/timetable',
+          createdAt: new Date()
+        });
+      }
+
+      if (!('Notification' in window)) {
+        setNotificationPermission('unsupported');
+        alert('Browser notifications are not supported on this device/browser.');
+        return;
+      }
+
+      if (Notification.permission === 'default') {
+        await Notification.requestPermission();
+      }
+      setNotificationPermission(Notification.permission);
+
+      if (Notification.permission !== 'granted') {
+        alert('Please allow notifications in your browser/site settings to see popup notifications.');
+        return;
+      }
+
+      new Notification('📚 Timetable Test', {
+        body: 'If you can see this, browser notifications are working.',
+        tag: 'timetable-test',
+        requireInteraction: false
+      });
+    } catch (e: any) {
+      console.error('Test notification failed:', e);
+      alert(`Test notification failed: ${e?.message || 'Unknown error'}`);
+    }
+  };
+  */
 
   const loadClasses = async () => {
     if (!user || !db) {
@@ -267,9 +324,9 @@ const Timetable: React.FC = () => {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900 pb-4 md:pb-4 lg:pb-0 w-full max-w-full overflow-x-hidden">
       <Header title="My Timetable" />
 
-      <div className="max-w-7xl mx-auto p-3 sm:p-4 md:px-6 lg:px-8 md:py-6 lg:py-8 w-full">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="max-w-7xl mx-auto p-3 sm:p-4 md:px-6 lg:px-8 md:py-6 lg:py-8 w-full">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-900 dark:text-white">Weekly Schedule</h1>
             <p className="text-sm text-slate-600 dark:text-slate-400 mt-1">Manage your class timetable</p>
@@ -297,7 +354,7 @@ const Timetable: React.FC = () => {
               <div className="flex items-center gap-4 mt-2 text-xs text-green-700">
                 <span className="flex items-center gap-1">
                   <Clock size={12} />
-                  Ends at {ongoingClass.endTime}
+                  Ends at {formatTime12h(ongoingClass.endTime)}
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin size={12} />
@@ -322,7 +379,7 @@ const Timetable: React.FC = () => {
               <div className="flex items-center gap-4 mt-2 text-xs text-amber-700">
                 <span className="flex items-center gap-1">
                   <Clock size={12} />
-                  {upcomingClass.startTime} - {upcomingClass.endTime}
+                  {formatTime12h(upcomingClass.startTime)} - {formatTime12h(upcomingClass.endTime)}
                 </span>
                 <span className="flex items-center gap-1">
                   <MapPin size={12} />
@@ -400,7 +457,7 @@ const Timetable: React.FC = () => {
                             <div className="mt-2 space-y-1">
                               <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">
                                 <Clock size={12} />
-                                {classItem.startTime} - {classItem.endTime}
+                                {formatTime12h(classItem.startTime)} - {formatTime12h(classItem.endTime)}
                               </div>
 
                               <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400">

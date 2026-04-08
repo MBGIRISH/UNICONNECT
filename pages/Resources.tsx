@@ -315,13 +315,13 @@ const Resources: React.FC = () => {
           department,
           year,
           subject,
-          moduleNumber: moduleNumber || undefined,
           college: userCollege, // Add college field for filtering
           uploadedBy: user.uid,
           uploaderName: userData?.displayName || user.displayName || 'Anonymous',
           uploaderPhoto: userData?.photoURL || user.photoURL || '',
           createdAt: serverTimestamp(),
           downloads: 0,
+          ...(moduleNumber ? { moduleNumber } : {}),
         });
       });
 

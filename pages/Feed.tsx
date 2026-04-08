@@ -123,23 +123,25 @@ const Feed: React.FC = () => {
         
         // Check each post to see if current user has liked it
         // Use Promise.allSettled to handle errors gracefully
-        const results = await Promise.allSettled(
-          posts.map(async (post) => {
-            const likeRef = doc(db, 'posts', post.id, 'likes', user.uid);
-            const likeDoc = await getDoc(likeRef);
-            if (likeDoc.exists()) {
-              return post.id;
+        if (db && user) {
+          const results = await Promise.allSettled(
+            posts.map(async (post) => {
+              const likeRef = doc(db!, 'posts', post.id, 'likes', user.uid);
+              const likeDoc = await getDoc(likeRef);
+              if (likeDoc.exists()) {
+                return post.id;
+              }
+              return null;
+            })
+          );
+          
+          // Collect all liked post IDs
+          results.forEach((result) => {
+            if (result.status === 'fulfilled' && result.value) {
+              likedPostIds.add(result.value);
             }
-            return null;
-          })
-        );
-        
-        // Collect all liked post IDs
-        results.forEach((result) => {
-          if (result.status === 'fulfilled' && result.value) {
-            likedPostIds.add(result.value);
-          }
-        });
+          });
+        }
         
         setLikedPosts(likedPostIds);
       } catch (error) {
@@ -381,7 +383,6 @@ const Feed: React.FC = () => {
           setAttachmentFile(null);
           setAttachmentPreview(null);
           setShowEmojiPicker(false);
-          setShowGifPicker(false);
           
           setSuccessMessage('Post created successfully! 🎉');
           setShowSuccessModal(true);

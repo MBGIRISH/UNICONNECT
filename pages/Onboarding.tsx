@@ -123,6 +123,8 @@ const POPULAR_COLLEGES = [
   'Other (Enter Your College)'
 ];
 
+const normalizePhoneNumber = (value: string) => value.replace(/\D/g, '').slice(0, 10);
+
 const Onboarding: React.FC = () => {
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
@@ -145,7 +147,18 @@ const Onboarding: React.FC = () => {
   const filteredColleges = useMemo(() => {
     const q = collegeSearch.trim().toLowerCase();
     if (!q) return POPULAR_COLLEGES;
-    return POPULAR_COLLEGES.filter((c) => c.toLowerCase().includes(q));
+
+    return [...POPULAR_COLLEGES]
+      .filter((college) => college.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aLower = a.toLowerCase();
+        const bLower = b.toLowerCase();
+        const aStarts = aLower.startsWith(q) ? 0 : 1;
+        const bStarts = bLower.startsWith(q) ? 0 : 1;
+
+        if (aStarts !== bStarts) return aStarts - bStarts;
+        return aLower.localeCompare(bLower);
+      });
   }, [collegeSearch]);
 
   const user = auth.currentUser;
@@ -184,6 +197,10 @@ const Onboarding: React.FC = () => {
       }
       if (!formData.phone || formData.phone.trim() === '') {
         alert('Please enter your phone number. This field is required.');
+        return;
+      }
+      if (formData.phone.length !== 10) {
+        alert('Please enter exactly 10 digits for your phone number.');
         return;
       }
     }
@@ -232,6 +249,9 @@ const Onboarding: React.FC = () => {
       }
       if (!formData.phone || formData.phone.trim() === '') {
         throw new Error('Please enter your phone number. This field is required.');
+      }
+      if (formData.phone.length !== 10) {
+        throw new Error('Please enter exactly 10 digits for your phone number.');
       }
 
       // Update other profile fields
@@ -354,7 +374,11 @@ const Onboarding: React.FC = () => {
                     <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
                     <select
                       value={formData.college}
-                      onChange={(e) => setFormData({ ...formData, college: e.target.value, customCollege: '' })}
+                      onChange={(e) => {
+                        const nextCollege = e.target.value;
+                        setFormData({ ...formData, college: nextCollege, customCollege: '' });
+                        setCollegeSearch(nextCollege === 'Other (Enter Your College)' ? '' : nextCollege);
+                      }}
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all appearance-none"
                     >
                       <option value="">Select your college...</option>
@@ -366,8 +390,33 @@ const Onboarding: React.FC = () => {
                     </select>
                   </div>
                   <p className="text-xs text-slate-500 mt-2">
-                    Tip: Search and then select from the list for best accuracy.
+                    Tip: Search and choose from the matching colleges shown below.
                   </p>
+                  {collegeSearch.trim() && (
+                    <div className="mt-3 max-h-56 overflow-y-auto rounded-xl border border-slate-200 bg-white">
+                      {filteredColleges.length > 0 ? (
+                        filteredColleges.map((college) => (
+                          <button
+                            key={college}
+                            type="button"
+                            onClick={() => {
+                              setFormData({ ...formData, college, customCollege: '' });
+                              setCollegeSearch(college === 'Other (Enter Your College)' ? '' : college);
+                            }}
+                            className={`w-full text-left px-4 py-3 border-b border-slate-100 last:border-b-0 hover:bg-indigo-50 transition-colors ${
+                              formData.college === college ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700'
+                            }`}
+                          >
+                            {college}
+                          </button>
+                        ))
+                      ) : (
+                        <div className="px-4 py-3 text-sm text-slate-500">
+                          No matching colleges found.
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
 
                 {formData.college === 'Other (Enter Your College)' && (
@@ -453,13 +502,16 @@ const Onboarding: React.FC = () => {
                     <input
                       type="tel"
                       value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={(e) => setFormData({ ...formData, phone: normalizePhoneNumber(e.target.value) })}
                       placeholder="Phone Number"
+                      inputMode="numeric"
+                      maxLength={10}
+                      pattern="[0-9]{10}"
                       className="w-full bg-slate-50 border border-slate-200 rounded-xl py-3 pl-10 pr-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
                       required
                     />
                   </div>
-                  <p className="text-xs text-slate-500 mt-1">This field is required</p>
+                  <p className="text-xs text-slate-500 mt-1">This field is required and must contain exactly 10 digits.</p>
                 </div>
 
                 <div>
